@@ -28,27 +28,32 @@ while grabbed:
 
     frame_out = diff_frame
 
-    raw_indices = np.nonzero(diff_frame >= 32)
+    diff_frame[diff_frame < 32] = 0
+    diff_frame[diff_frame > 64] = 0
+    raw_indices = np.nonzero(diff_frame > 0)
     indices = [(x,y) for x,y in zip(raw_indices[1], raw_indices[0])]
     indices = [] if indices is None else indices
-    process = 550 < len(indices) < 1550
+    process = 200 < len(indices) < 2000
     if process:
-        boundary = cv2.boundingRect(np.array(indices)) if indices else None
-    else:
-        boundary = re_boundary
-    if boundary and re_boundary and process:
-        bw, bh = 128, 128
-        bx, by = boundary[0:2]
-        rbx, rby = re_boundary[0:2]
-        pivot = 25
-        bx = rbx if abs(bx-rbx) > pivot else bx
-        by = rby if abs(by-rby) > pivot else by
-        cv2.rectangle(
-            frame_out, (bx, by), (bx+bw, by+bh),
-            (255, 255, 255), 1
-        )
-        boundary = (bx, by, 0, 0)
-    re_boundary = boundary
+        z = np.hstack((raw_indices[1], raw_indices[0]))
+        # width, height = cv2.GetSize(gray_frame_in)
+        z = z.reshape((len(z), 1))
+        z = np.float32(z)
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+        flags = cv2.KMEANS_PP_CENTERS
+        compactness, labels, centers = cv2.kmeans(z, 2, None, criteria, 10, flags)
+        if np.sum(labels) > 0:
+            # print(centers, labels, np.sum(labels))
+            indices = [(x,y) for x,y in zip(centers[0], centers[1])]
+            boundary = cv2.boundingRect(np.array(indices)) if indices else None
+            if boundary:
+                bx, by, bw, bh = boundary
+                draw = True #15 < bw < 180 and 15 < bh < 180
+                if draw:
+                    cv2.rectangle(
+                        frame_out, (bx, by), (bx+bw, by+bh),
+                        (255, 255, 255), 1
+                    )
 
     cv2.imshow("IP Camera", frame_out)
     if cv2.waitKey(delay=wait_delay) & 0xFF == ord('q'):
