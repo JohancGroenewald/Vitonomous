@@ -26,14 +26,17 @@ while grabbed:
 
     diff_frame = cv2.absdiff(gray_frame_in, gray_re_frame)
 
+    frame_out = diff_frame
+
     raw_indices = np.nonzero(diff_frame >= 32)
     indices = [(x,y) for x,y in zip(raw_indices[1], raw_indices[0])]
     indices = [] if indices is None else indices
-    if 550 < len(indices) < 1050:
+    process = 550 < len(indices) < 1550
+    if process:
         boundary = cv2.boundingRect(np.array(indices)) if indices else None
     else:
         boundary = re_boundary
-    if boundary and re_boundary:
+    if boundary and re_boundary and process:
         bw, bh = 128, 128
         bx, by = boundary[0:2]
         rbx, rby = re_boundary[0:2]
@@ -47,7 +50,6 @@ while grabbed:
         boundary = (bx, by, 0, 0)
     re_boundary = boundary
 
-    # frame_out = diff_frame
     cv2.imshow("IP Camera", frame_out)
     if cv2.waitKey(delay=wait_delay) & 0xFF == ord('q'):
         break
