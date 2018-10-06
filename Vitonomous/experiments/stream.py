@@ -15,14 +15,15 @@ capture = cv2.VideoCapture(url)
 re_boundary = None
 gesture_rectangle = None
 bx, by, bw, bh = None, None, None, None
-attached = False
-bw = 100
+# ###################################################################
+stable_counter = 0
+wider_counter = 0
 # ###################################################################
 grabbed, re_frame = capture.read()
 if grabbed:
     h, w, c = re_frame.shape
-    gesture_rectangle = [w//2-bw//2, h//2-bw//2, bw, bw]
-    bx, by, bw, bh = gesture_rectangle
+    bx, by, bw, bh = 0, 0, w, h
+    gesture_rectangle = (bx, by, bw, bh)
 while grabbed:
     grabbed, frame_in = capture.read()
     if not grabbed:
@@ -47,29 +48,39 @@ while grabbed:
     if process:
         boundary = cv2.boundingRect(np.array(indices))
         bx, by, bw, bh = boundary
+        # cv2.rectangle(
+        #     frame_out, (bx, by), (bx+bw, by+bh),
+        #     (255, 255, 255), 1
+        # )
         # ###########################################################
-        # if not attached:
-        #     bxc = bx + bw//2
-        #     byc = by + bh//2
-        #     gx, gy, gw, gh = gesture_rectangle
-        #     gxc = gx + gw//2
-        #     gyc = gy + gh//2
-        #     gxc += (bxc - gxc)
-        #     gyc += (byc - gyc)
-        #     gesture_rectangle[0] = gxc
-        #     gesture_rectangle[1] = gyc
-        # ###########################################################
-        cv2.rectangle(
-            frame_out, (bx, by), (bx+bw, by+bh),
-            (255, 255, 255), 1
-        )
-        # ###########################################################
-    # gx, gy, gw, gh = gesture_rectangle
-    cv2.rectangle(
-        frame_out, (bx, by), (bx+bw, by+bh),
-        (255, 255, 255), 1
-    )
+    color = (255, 255, 255)
+    grx, gry, grw, grh = gesture_rectangle
+    # stable ########################################################
+    if grx-bx == gry-by == grw-bw == grh-bh == 0:
+        stable_counter += 1
+        if stable_counter > 10:
+            color = (255, 0, 0)
+            wider_counter = 0
+    else:
+        stable_counter = 0
+    # growing #######################################################
+    if stable_counter == 0:
+        if bw - grw > 5:
+            wider_counter += 1
+        elif bw - grw < -5:
+            wider_counter -= 1
+        if wider_counter > 2:
+            color = (0, 255, 0)
+        elif wider_counter < -2:
+            color = (0, 0, 255)
+
+    # shrinking #####################################################
+    # moving ########################################################
     gesture_rectangle = (bx, by, bw, bh)
+
+    cv2.rectangle(
+        frame_out, (bx, by), (bx+bw, by+bh), color, 1
+    )
     # ###############################################################
     cv2.imshow("IP Camera", frame_out)
     if cv2.waitKey(delay=wait_delay) & 0xFF == ord('q'):
