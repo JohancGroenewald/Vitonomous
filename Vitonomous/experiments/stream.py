@@ -20,40 +20,32 @@ while grabbed:
         print('Error grabbing frame')
         break
 
-    frame_out = frame_in.copy()
     gray_frame_in = cv2.cvtColor(frame_in, cv2.COLOR_BGR2GRAY)
     gray_re_frame = cv2.cvtColor(re_frame, cv2.COLOR_BGR2GRAY)
 
     diff_frame = cv2.absdiff(gray_frame_in, gray_re_frame)
 
-    frame_out = diff_frame
+    # frame_out = diff_frame
+    frame_out = frame_in.copy()
 
-    diff_frame[diff_frame < 32] = 0
-    diff_frame[diff_frame > 64] = 0
-    raw_indices = np.nonzero(diff_frame > 0)
+    # diff_frame[diff_frame < 32] = 0
+    # diff_frame[diff_frame > 64] = 0
+    # raw_indices = np.nonzero(diff_frame > 0)
+
+    kernel = np.ones((5, 5), np.float32) / 25
+    diff_frame = cv2.filter2D(diff_frame, -1, kernel)
+    raw_indices = np.nonzero(diff_frame > 32)
     indices = [(x,y) for x,y in zip(raw_indices[1], raw_indices[0])]
     indices = [] if indices is None else indices
     process = 200 < len(indices) < 2000
     if process:
-        z = np.hstack((raw_indices[1], raw_indices[0]))
-        # width, height = cv2.GetSize(gray_frame_in)
-        z = z.reshape((len(z), 1))
-        z = np.float32(z)
-        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-        flags = cv2.KMEANS_PP_CENTERS
-        compactness, labels, centers = cv2.kmeans(z, 2, None, criteria, 10, flags)
-        if np.sum(labels) > 0:
-            # print(centers, labels, np.sum(labels))
-            indices = [(x,y) for x,y in zip(centers[0], centers[1])]
-            boundary = cv2.boundingRect(np.array(indices)) if indices else None
-            if boundary:
-                bx, by, bw, bh = boundary
-                draw = True #15 < bw < 180 and 15 < bh < 180
-                if draw:
-                    cv2.rectangle(
-                        frame_out, (bx, by), (bx+bw, by+bh),
-                        (255, 255, 255), 1
-                    )
+        boundary = cv2.boundingRect(np.array(indices)) if indices else None
+        if boundary:
+            bx, by, bw, bh = boundary
+            cv2.rectangle(
+                frame_out, (bx, by), (bx+bw, by+bh),
+                (255, 255, 255), 1
+            )
 
     cv2.imshow("IP Camera", frame_out)
     if cv2.waitKey(delay=wait_delay) & 0xFF == ord('q'):
