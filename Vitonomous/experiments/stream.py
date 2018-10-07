@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import math
 
 ip = '192.168.0.140'
 port = 8000
@@ -11,7 +12,7 @@ url = 'http://{0}:{1}/{2}{3}'.format(ip, port, stream_type, auth)
 wait_delay = 2
 
 # ###################################################################
-verbose = 0
+verbose = 1
 # ###################################################################
 capture = cv2.VideoCapture(url)
 # ###################################################################
@@ -75,13 +76,22 @@ while grabbed:
         gesture_triggered = False
     # translating ###################################################
     if not stable_triggered:
-        if len(gesture_record) < 100 and bw < w*0.4 and bh < h*0.4:
+        if len(gesture_record) < 100:
             center = (grx+grw//2, gry+grh//2)
-            if gesture_record[-1] != center:
-                gesture_record.append(center)
-            if verbose:
-                for center in gesture_record:
-                    cv2.circle(frame_out, center, 5, (255, 0, 0))
+            filter = False
+            # if bw > w*0.4 or bh > h*0.4:
+            #     filter = True
+            # if len(gesture_record) > 1:
+            #     a, b = gesture_record[1], gesture_record[-1]
+            #     dist = math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2)
+            #     if dist > 100:
+            #         filter = True
+            if not filter:
+                if gesture_record[-1] != center:
+                    gesture_record.append(center)
+        if verbose:
+            for center in gesture_record:
+                cv2.circle(frame_out, center, 5, (255, 0, 0))
     elif stable_triggered and not gesture_triggered and len(gesture_record) > 1:
         start, stop = gesture_record[1], gesture_record[-1]
         gesture_record = [(0, 0)]
