@@ -10,14 +10,22 @@ auth = '?user={}&password={}'.format(user, password)
 url = 'http://{0}:{1}/{2}{3}'.format(ip, port, stream_type, auth)
 wait_delay = 2
 
+# ###################################################################
+verbose = 0
+# ###################################################################
 capture = cv2.VideoCapture(url)
 # ###################################################################
 re_boundary = None
 gesture_rectangle = None
 bx, by, bw, bh = None, None, None, None
 # ###################################################################
+gesture_record = [(0, 0)]
+# ###################################################################
 stable_counter = 0
 wider_counter = 0
+# ###################################################################
+stable_triggered = False
+gesture_triggered = False
 # ###################################################################
 grabbed, re_frame = capture.read()
 if grabbed:
@@ -48,43 +56,55 @@ while grabbed:
     if process:
         boundary = cv2.boundingRect(np.array(indices))
         bx, by, bw, bh = boundary
-        # cv2.rectangle(
-        #     frame_out, (bx, by), (bx+bw, by+bh),
-        #     (255, 255, 255), 1
-        # )
-        # ###########################################################
+    # ###############################################################
     color = (255, 255, 255)
+    thickness = 1
     grx, gry, grw, grh = gesture_rectangle
     # stable ########################################################
-    if grx-bx == gry-by == grw-bw == grh-bh == 0:
+    stable = grx-bx == gry-by == grw-bw == grh-bh == 0
+    if stable and not stable_triggered:
         stable_counter += 1
         if stable_counter > 10:
-            color = (255, 0, 0)
-            wider_counter = 0
-    else:
+            stable_triggered = True
+    elif stable and stable_triggered:
+        color = (255, 0, 0)
+        thickness = 2
+    elif not stable:
         stable_counter = 0
-    # growing #######################################################
-    if stable_counter == 0:
-        if bw - grw > 5:
-            wider_counter += 1
-        elif bw - grw < -5:
-            wider_counter -= 1
-        if wider_counter > 2:
-            color = (0, 255, 0)
-        elif wider_counter < -2:
-            color = (0, 0, 255)
-
+        stable_triggered = False
+        gesture_triggered = False
+    # translating ###################################################
+    if not stable_triggered:
+        if len(gesture_record) < 100 and bw < w*0.4 and bh < h*0.4:
+            center = (grx+grw//2, gry+grh//2)
+            if gesture_record[-1] != center:
+                gesture_record.append(center)
+            if verbose:
+                for center in gesture_record:
+                    cv2.circle(frame_out, center, 5, (255, 0, 0))
+    elif stable_triggered and not gesture_triggered and len(gesture_record) > 1:
+        start, stop = gesture_record[1], gesture_record[-1]
+        gesture_record = [(0, 0)]
+        gesture_triggered = True
+    elif stable_triggered and gesture_triggered:
+        cv2.arrowedLine(
+            frame_out, start, stop, (51, 255, 255), thickness=2
+        )
     # shrinking #####################################################
     # moving ########################################################
     gesture_rectangle = (bx, by, bw, bh)
-
-    cv2.rectangle(
-        frame_out, (bx, by), (bx+bw, by+bh), color, 1
-    )
+    if verbose:
+        cv2.rectangle(
+            frame_out, (bx, by), (bx+bw, by+bh), color, thickness
+        )
     # ###############################################################
     cv2.imshow("IP Camera", frame_out)
-    if cv2.waitKey(delay=wait_delay) & 0xFF == ord('q'):
+    key = cv2.waitKey(delay=wait_delay) & 0xFF
+    if key == ord('q'):
         break
+    elif key == ord('p'):
+        print(gesture_record)
+        gesture_record = [(0, 0)]
     # ###############################################################
     re_frame = frame_in
     # ###############################################################
