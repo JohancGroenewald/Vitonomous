@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import math
+import datetime
 
 ip = '192.168.0.140'
 port = 8000
@@ -11,6 +12,10 @@ auth = '?user={}&password={}'.format(user, password)
 url = 'http://{0}:{1}/{2}{3}'.format(ip, port, stream_type, auth)
 wait_delay = 2
 
+record = False
+fps = 16
+four_cc = cv2.VideoWriter.fourcc(*'DIVX')
+in_color = True
 # ###################################################################
 verbose = 1
 # ###################################################################
@@ -33,6 +38,8 @@ if grabbed:
     h, w, c = re_frame.shape
     bx, by, bw, bh = 0, 0, w, h
     gesture_rectangle = (bx, by, bw, bh)
+    record_shape = w, h
+
 while grabbed:
     grabbed, frame_in = capture.read()
     if not grabbed:
@@ -77,21 +84,62 @@ while grabbed:
     # translating ###################################################
     if not stable_triggered:
         if len(gesture_record) < 100:
-            center = (grx+grw//2, gry+grh//2)
-            filter = False
-            # if bw > w*0.4 or bh > h*0.4:
-            #     filter = True
-            # if len(gesture_record) > 1:
-            #     a, b = gesture_record[1], gesture_record[-1]
-            #     dist = math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2)
-            #     if dist > 100:
-            #         filter = True
-            if not filter:
-                if gesture_record[-1] != center:
-                    gesture_record.append(center)
+            adj_x = 0
+            adj_y = 0
+            cen_x, cen_y = grx+grw//2, gry+grh//2
+            if len(gesture_record) > 1:
+                re_cx, re_cy = gesture_record[-1]
+                # print(re_cx, re_cy, cen_x, cen_y)
+                adj_x = (cen_x - re_cx) // 3
+                adj_y = (cen_y - re_cy) // 3
+            center = (adj_x+cen_x, adj_y+cen_y)
+            if gesture_record[-1] != center:
+                gesture_record.append(center)
         if verbose:
-            for center in gesture_record:
-                cv2.circle(frame_out, center, 5, (255, 0, 0))
+            offset = 3
+            tx_max = h - 65
+            tx = h - 30
+            ty_max = h - 65
+            ty = h - 30
+            tx_high_count = 0
+            tx_low_count = 0
+            ty_high_count = 0
+            ty_low_count = 0
+            t_pivot = 5
+            for i, center in enumerate(gesture_record[1:]):
+                # cv2.circle(frame_out, center, 5, (255, 0, 0))
+                cx, cy = center
+                cv2.line(frame_out, (offset*i, cx), (offset*i, h), (255, 255, 255), 1)
+                cv2.line(frame_out, (w//2 + offset*i, cy), (w//2 + offset*i, h), (255, 255, 255), 1)
+                if i > 0:
+                    rcx, rcy = re_center
+                    if cx < rcx:
+                        tx_high_count += 1
+                    elif cx > rcx:
+                        tx_low_count += 1
+                    if cy < rcy:
+                        ty_high_count += 1
+                    elif cy > rcy:
+                        ty_low_count += 1
+                    if tx_high_count > t_pivot:
+                        tx = tx_max
+                        tx_high_count = 0
+                        tx_low_count = 0
+                    elif tx_low_count > t_pivot:
+                        tx = h - 5
+                        tx_high_count = 0
+                        tx_low_count = 0
+                    if ty_high_count > t_pivot:
+                        ty = ty_max
+                        ty_high_count = 0
+                        ty_low_count = 0
+                    elif ty_low_count > t_pivot:
+                        ty = h - 5
+                        ty_high_count = 0
+                        ty_low_count = 0
+                cv2.line(frame_out, (offset*i, tx), (offset*i, h), (255, 0, 0), 1)
+                cv2.line(frame_out, (w//2 + offset*i, ty), (w//2 + offset*i, h), (255, 0, 0), 1)
+                re_center = center
     elif stable_triggered and not gesture_triggered and len(gesture_record) > 1:
         start, stop = gesture_record[1], gesture_record[-1]
         gesture_record = [(0, 0)]
@@ -108,13 +156,23 @@ while grabbed:
             frame_out, (bx, by), (bx+bw, by+bh), color, thickness
         )
     # ###############################################################
-    cv2.imshow("IP Camera", frame_out)
+    cv2.imshow('IP Camera', frame_out)
+    # ###############################################################
+    if record:
+        stream_out.write(frame_out)
+    # ###############################################################
     key = cv2.waitKey(delay=wait_delay) & 0xFF
     if key == ord('q'):
         break
     elif key == ord('p'):
         print(gesture_record)
         gesture_record = [(0, 0)]
+    elif key == ord('r') and record is False:
+        uri = 'recording_{}.avi'.format(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+        stream_out = cv2.VideoWriter(uri, four_cc, fps, record_shape, in_color)
+        record = True
+    elif key == ord('r') and record is True:
+        record = False
     # ###############################################################
     re_frame = frame_in
     # ###############################################################
