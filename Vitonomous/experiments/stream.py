@@ -26,12 +26,16 @@ gesture_rectangle = None
 bx, by, bw, bh = None, None, None, None
 # ###################################################################
 gesture_record = [(0, 0)]
+signal_x_record = []
+signal_y_record = []
 # ###################################################################
 stable_counter = 0
 wider_counter = 0
 # ###################################################################
 stable_triggered = False
 gesture_triggered = False
+gesture_processed = False
+gesture_detected = 0
 # ###################################################################
 grabbed, re_frame = capture.read()
 if grabbed:
@@ -81,6 +85,7 @@ while grabbed:
         stable_counter = 0
         stable_triggered = False
         gesture_triggered = False
+        gesture_processed = False
     # translating ###################################################
     if not stable_triggered:
         if len(gesture_record) < 100:
@@ -92,62 +97,107 @@ while grabbed:
                 # print(re_cx, re_cy, cen_x, cen_y)
                 adj_x = (cen_x - re_cx) // 3
                 adj_y = (cen_y - re_cy) // 3
-            center = (adj_x+cen_x, adj_y+cen_y)
+                center = (adj_x+cen_x, adj_y+cen_y)
+                if gesture_record[-1] != center:
+                    gesture_record.append(center)
+            center = (cen_x, cen_y)
             if gesture_record[-1] != center:
                 gesture_record.append(center)
-        if verbose:
-            offset = 3
-            tx_max = h - 65
-            tx = h - 30
-            ty_max = h - 65
-            ty = h - 30
-            tx_high_count = 0
-            tx_low_count = 0
-            ty_high_count = 0
-            ty_low_count = 0
-            t_pivot = 5
-            for i, center in enumerate(gesture_record[1:]):
-                # cv2.circle(frame_out, center, 5, (255, 0, 0))
-                cx, cy = center
+        offset = 2
+        tx_max = h - 65
+        tx = h - 30
+        ty_max = h - 65
+        ty = h - 30
+        tx_high_count = 0
+        tx_low_count = 0
+        ty_high_count = 0
+        ty_low_count = 0
+        t_pivot = 5
+        for i, center in enumerate(gesture_record[1:]):
+            # cv2.circle(frame_out, center, 5, (255, 0, 0))
+            cx, cy = center
+            if verbose:
                 cv2.line(frame_out, (offset*i, cx), (offset*i, h), (255, 255, 255), 1)
                 cv2.line(frame_out, (w//2 + offset*i, cy), (w//2 + offset*i, h), (255, 255, 255), 1)
-                if i > 0:
-                    rcx, rcy = re_center
-                    if cx < rcx:
-                        tx_high_count += 1
-                    elif cx > rcx:
-                        tx_low_count += 1
-                    if cy < rcy:
-                        ty_high_count += 1
-                    elif cy > rcy:
-                        ty_low_count += 1
-                    if tx_high_count > t_pivot:
-                        tx = tx_max
-                        tx_high_count = 0
-                        tx_low_count = 0
-                    elif tx_low_count > t_pivot:
-                        tx = h - 5
-                        tx_high_count = 0
-                        tx_low_count = 0
-                    if ty_high_count > t_pivot:
-                        ty = ty_max
-                        ty_high_count = 0
-                        ty_low_count = 0
-                    elif ty_low_count > t_pivot:
-                        ty = h - 5
-                        ty_high_count = 0
-                        ty_low_count = 0
+            if i > 0:
+                rcx, rcy = re_center
+                # if cx < rcx and rcx - cx > 7:
+                #     tx_high_count += 1
+                # elif cx > rcx and cx - rcx > 7:
+                #     tx_low_count += 1
+                # if cy < rcy and rcy - cy > 7:
+                #     ty_high_count += 1
+                # elif cy > rcy and cy - rcy > 7:
+                #     ty_low_count += 1
+                if cx < rcx:
+                    tx_high_count += 1
+                elif cx > rcx:
+                    tx_low_count += 1
+                if cy < rcy:
+                    ty_high_count += 1
+                elif cy > rcy:
+                    ty_low_count += 1
+                if tx_high_count > t_pivot:
+                    tx = tx_max
+                    tx_high_count = 0
+                    tx_low_count = 0
+                elif tx_low_count > t_pivot:
+                    tx = h - 5
+                    tx_high_count = 0
+                    tx_low_count = 0
+                if ty_high_count > t_pivot:
+                    ty = ty_max
+                    ty_high_count = 0
+                    ty_low_count = 0
+                elif ty_low_count > t_pivot:
+                    ty = h - 5
+                    ty_high_count = 0
+                    ty_low_count = 0
+                if len(signal_x_record) == 0 or tx != signal_x_record[-1]:
+                    signal_x_record.append(tx)
+                if len(signal_y_record) == 0 or ty != signal_y_record[-1]:
+                    signal_y_record.append(ty)
+            if verbose:
                 cv2.line(frame_out, (offset*i, tx), (offset*i, h), (255, 0, 0), 1)
                 cv2.line(frame_out, (w//2 + offset*i, ty), (w//2 + offset*i, h), (255, 0, 0), 1)
-                re_center = center
+            re_center = center
+
     elif stable_triggered and not gesture_triggered and len(gesture_record) > 1:
         start, stop = gesture_record[1], gesture_record[-1]
         gesture_record = [(0, 0)]
         gesture_triggered = True
-    elif stable_triggered and gesture_triggered:
-        cv2.arrowedLine(
-            frame_out, start, stop, (51, 255, 255), thickness=2
-        )
+    elif stable_triggered and gesture_triggered and not gesture_processed:
+        print('x', signal_x_record[:4])
+        print('y', signal_y_record[:4])
+        gesture_detected = 0
+        if len(signal_x_record) > 1 and len(signal_y_record) > 1:
+            if signal_x_record[:4] == [450, 415, 450, 415] and signal_y_record[:4] == [450, 415, 450, 415]:
+                gesture_detected = 1
+            elif signal_x_record[:4] == [450, 475, 450, 475] and signal_y_record[:4] == [450, 415, 450, 415]:
+                gesture_detected = 2
+            elif signal_x_record[:4] == [450, 475, 450, 475] and signal_y_record[:4] == [450, 475, 450, 475]:
+                gesture_detected = 3
+            elif signal_x_record[:4] == [450, 415, 450, 415] and signal_y_record[:4] == [450, 475, 450, 475]:
+                gesture_detected = 4
+        signal_x_record = []
+        signal_y_record = []
+        gesture_processed = True
+    elif stable_triggered and gesture_triggered and gesture_processed:
+        gesture_text = None
+        if gesture_detected == 1:
+            gesture_text = 'Volume UP'
+        elif gesture_detected == 2:
+            gesture_text = 'Volume DOWN'
+        elif gesture_detected == 3:
+            gesture_text = 'Move NEXT'
+        elif gesture_detected == 4:
+            gesture_text = 'Move PREVIOUS'
+        if gesture_text:
+            cv2.putText(
+                frame_out, gesture_text, (0, h//2),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2,
+                cv2.LINE_AA
+            )
     # shrinking #####################################################
     # moving ########################################################
     gesture_rectangle = (bx, by, bw, bh)
