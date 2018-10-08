@@ -20,28 +20,35 @@ in_color = True
 verbose = 1
 # ###################################################################
 capture = cv2.VideoCapture(url)
+stream_out = None
 # ###################################################################
-re_boundary = None
+tx, ty, tw, th = None, None, None, None
+GX, GY, GW, GH = None, None, None, None
+# ###################################################################
+horizontal = 0
+horizontal_tracking = [0]
+# ###################################################################
+tracking_rectangle = None
 gesture_rectangle = None
-bx, by, bw, bh = None, None, None, None
 # ###################################################################
-gesture_record = [(0, 0)]
+g_scale = 0.15
+# ###################################################################
+tracking_record = [(0, 0)]
 signal_x_record = []
 signal_y_record = []
 # ###################################################################
-stable_counter = 0
-wider_counter = 0
 # ###################################################################
-stable_triggered = False
-gesture_triggered = False
-gesture_processed = False
-gesture_detected = 0
 # ###################################################################
 grabbed, re_frame = capture.read()
 if grabbed:
     h, w, c = re_frame.shape
-    bx, by, bw, bh = 0, 0, w, h
-    gesture_rectangle = (bx, by, bw, bh)
+    tx, ty, tw, th = 0, 0, w, h
+    tracking_rectangle = (tx, ty, tw, th)
+    GX, GY, GW, GH = int(w//2-w*g_scale//2), \
+                     int(h//2-h*g_scale//2), \
+                     int(w*g_scale), \
+                     int(h*g_scale)
+    gesture_rectangle = (GX, GY, GW, GH)
     record_shape = w, h
 
 while grabbed:
@@ -67,143 +74,63 @@ while grabbed:
     # ###############################################################
     if process:
         boundary = cv2.boundingRect(np.array(indices))
-        bx, by, bw, bh = boundary
+        tx, ty, tw, th = boundary
     # ###############################################################
-    color = (255, 255, 255)
+    color_white = (255, 255, 255)
     thickness = 1
-    grx, gry, grw, grh = gesture_rectangle
-    # stable ########################################################
-    stable = grx-bx == gry-by == grw-bw == grh-bh == 0
-    if stable and not stable_triggered:
-        stable_counter += 1
-        if stable_counter > 10:
-            stable_triggered = True
-    elif stable and stable_triggered:
-        color = (255, 0, 0)
-        thickness = 2
-    elif not stable:
-        stable_counter = 0
-        stable_triggered = False
-        gesture_triggered = False
-        gesture_processed = False
-    # translating ###################################################
-    if not stable_triggered:
-        if len(gesture_record) < 100:
-            adj_x = 0
-            adj_y = 0
-            cen_x, cen_y = grx+grw//2, gry+grh//2
-            if len(gesture_record) > 1:
-                re_cx, re_cy = gesture_record[-1]
-                # print(re_cx, re_cy, cen_x, cen_y)
-                adj_x = (cen_x - re_cx) // 3
-                adj_y = (cen_y - re_cy) // 3
-                center = (adj_x+cen_x, adj_y+cen_y)
-                if gesture_record[-1] != center:
-                    gesture_record.append(center)
-            center = (cen_x, cen_y)
-            if gesture_record[-1] != center:
-                gesture_record.append(center)
-        offset = 2
-        tx_max = h - 65
-        tx = h - 30
-        ty_max = h - 65
-        ty = h - 30
-        tx_high_count = 0
-        tx_low_count = 0
-        ty_high_count = 0
-        ty_low_count = 0
-        t_pivot = 5
-        for i, center in enumerate(gesture_record[1:]):
-            # cv2.circle(frame_out, center, 5, (255, 0, 0))
-            cx, cy = center
-            if verbose:
-                cv2.line(frame_out, (offset*i, cx), (offset*i, h), (255, 255, 255), 1)
-                cv2.line(frame_out, (w//2 + offset*i, cy), (w//2 + offset*i, h), (255, 255, 255), 1)
-            if i > 0:
-                rcx, rcy = re_center
-                # if cx < rcx and rcx - cx > 7:
-                #     tx_high_count += 1
-                # elif cx > rcx and cx - rcx > 7:
-                #     tx_low_count += 1
-                # if cy < rcy and rcy - cy > 7:
-                #     ty_high_count += 1
-                # elif cy > rcy and cy - rcy > 7:
-                #     ty_low_count += 1
-                if cx < rcx:
-                    tx_high_count += 1
-                elif cx > rcx:
-                    tx_low_count += 1
-                if cy < rcy:
-                    ty_high_count += 1
-                elif cy > rcy:
-                    ty_low_count += 1
-                if tx_high_count > t_pivot:
-                    tx = tx_max
-                    tx_high_count = 0
-                    tx_low_count = 0
-                elif tx_low_count > t_pivot:
-                    tx = h - 5
-                    tx_high_count = 0
-                    tx_low_count = 0
-                if ty_high_count > t_pivot:
-                    ty = ty_max
-                    ty_high_count = 0
-                    ty_low_count = 0
-                elif ty_low_count > t_pivot:
-                    ty = h - 5
-                    ty_high_count = 0
-                    ty_low_count = 0
-                if len(signal_x_record) == 0 or tx != signal_x_record[-1]:
-                    signal_x_record.append(tx)
-                if len(signal_y_record) == 0 or ty != signal_y_record[-1]:
-                    signal_y_record.append(ty)
-            if verbose:
-                cv2.line(frame_out, (offset*i, tx), (offset*i, h), (255, 0, 0), 1)
-                cv2.line(frame_out, (w//2 + offset*i, ty), (w//2 + offset*i, h), (255, 0, 0), 1)
-            re_center = center
-
-    elif stable_triggered and not gesture_triggered and len(gesture_record) > 1:
-        start, stop = gesture_record[1], gesture_record[-1]
-        gesture_record = [(0, 0)]
-        gesture_triggered = True
-    elif stable_triggered and gesture_triggered and not gesture_processed:
-        print('x', signal_x_record[:4])
-        print('y', signal_y_record[:4])
-        gesture_detected = 0
-        if len(signal_x_record) > 1 and len(signal_y_record) > 1:
-            if signal_x_record[:4] == [450, 415, 450, 415] and signal_y_record[:4] == [450, 415, 450, 415]:
-                gesture_detected = 1
-            elif signal_x_record[:4] == [450, 475, 450, 475] and signal_y_record[:4] == [450, 415, 450, 415]:
-                gesture_detected = 2
-            elif signal_x_record[:4] == [450, 475, 450, 475] and signal_y_record[:4] == [450, 475, 450, 475]:
-                gesture_detected = 3
-            elif signal_x_record[:4] == [450, 415, 450, 415] and signal_y_record[:4] == [450, 475, 450, 475]:
-                gesture_detected = 4
-        signal_x_record = []
-        signal_y_record = []
-        gesture_processed = True
-    elif stable_triggered and gesture_triggered and gesture_processed:
-        gesture_text = None
-        if gesture_detected == 1:
-            gesture_text = 'Volume UP'
-        elif gesture_detected == 2:
-            gesture_text = 'Volume DOWN'
-        elif gesture_detected == 3:
-            gesture_text = 'Move NEXT'
-        elif gesture_detected == 4:
-            gesture_text = 'Move PREVIOUS'
-        if gesture_text:
-            cv2.putText(
-                frame_out, gesture_text, (0, h//2),
-                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2,
-                cv2.LINE_AA
-            )
-    # shrinking #####################################################
+    rtx, rty, rtw, rth = tracking_rectangle
+    c_rtx, c_rty = rtx+rtw//2, rty+rth//2
+    gx, gy, gw, gh = gesture_rectangle
+    c_gx, c_gy = gx+gw//2, gy+gh//2
     # moving ########################################################
-    gesture_rectangle = (bx, by, bw, bh)
+    velocity = 3
+    delta = rtx+rtw - c_gx
+    if delta < 0 and horizontal <= 0:
+        delta = abs(delta)
+        adjust = delta if delta < velocity else velocity
+        gx -= adjust
+        horizontal = -1
+        if horizontal_tracking[-1] != horizontal:
+            horizontal_tracking.append(horizontal)
+            print(horizontal_tracking)
+    elif delta > 0 and horizontal >= 0:
+        delta = abs(delta)
+        adjust = delta if delta < velocity else velocity
+        gx += adjust
+        horizontal = +1
+        if horizontal_tracking[-1] != horizontal:
+            horizontal_tracking.append(horizontal)
+            print(horizontal_tracking)
+    else:
+        horizontal = 0
+        if horizontal_tracking[-1] != horizontal:
+            horizontal_tracking.append(horizontal)
+            print(horizontal_tracking)
+        if horizontal_tracking.count(horizontal) > 3:
+            if horizontal_tracking == [0, 1, 0, -1, 0, 1, 0]:
+                print('SELECT >>')
+            elif horizontal_tracking == [0, -1, 0, 1, 0, -1, 0]:
+                print('SELECT <<')
+            horizontal_tracking = [horizontal]
+            print(horizontal_tracking)
+
+    # ###############################################################
+    gesture_rectangle = (gx, GY, GW, GH)
+    # ###############################################################
+    tracking_rectangle = (tx, ty, tw, th)
     if verbose:
+        color = color_white
         cv2.rectangle(
-            frame_out, (bx, by), (bx+bw, by+bh), color, thickness
+            frame_out, (tx, ty), (tx + tw, ty + th), color, thickness
+        )
+    # ###############################################################
+    color_blue = (255, 0, 0)
+    gx, gy, gw, gh = gesture_rectangle
+    if verbose:
+        color = color_blue
+        thickness = 2
+        cv2.rectangle(
+            frame_out, (gx, gy), (gx + gw, gy + gh), color, thickness
         )
     # ###############################################################
     cv2.imshow('IP Camera', frame_out)
@@ -215,8 +142,8 @@ while grabbed:
     if key == ord('q'):
         break
     elif key == ord('p'):
-        print(gesture_record)
-        gesture_record = [(0, 0)]
+        print(tracking_record)
+        tracking_record = [(0, 0)]
     elif key == ord('r') and record is False:
         uri = 'recording_{}.avi'.format(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
         stream_out = cv2.VideoWriter(uri, four_cc, fps, record_shape, in_color)
