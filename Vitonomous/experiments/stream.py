@@ -32,8 +32,9 @@ GW, GH = None, None
 L_GX, R_GX, C_GX = None, None, None
 T_GY, B_GY, C_GY = None, None, None
 # ###################################################################
-horizontal = 0
+horizontal = 0x00
 horizontal_tracking = [0]
+delta_stable = 5
 # ###################################################################
 tracking_rectangle = None
 gesture_rectangle = None
@@ -91,44 +92,21 @@ while grabbed:
     c_trx, c_try, trw, trh = tracking_rectangle
     c_gx, c_gy = gesture_rectangle
     # moving ########################################################
-    velocity = 3
-    # delta = tx - rtx
-    # if delta < 0 and horizontal <= 0:
-    #     delta = abs(delta)
-    #     adjust = delta if delta < velocity else velocity
-    #     gx -= adjust
-    #     horizontal = -1
-    #     if horizontal_tracking[-1] != horizontal:
-    #         horizontal_tracking.append(horizontal)
-    #         print(horizontal_tracking)
-    # elif delta > 0 and horizontal >= 0:
-    #     delta = abs(delta)
-    #     adjust = delta if delta < velocity else velocity
-    #     gx += adjust
-    #     horizontal = +1
-    #     if horizontal_tracking[-1] != horizontal:
-    #         horizontal_tracking.append(horizontal)
-    #         print(horizontal_tracking)
-    # else:
-    #     horizontal = 0
-    #     if horizontal_tracking[-1] != horizontal:
-    #         horizontal_tracking.append(horizontal)
-    #         print(horizontal_tracking)
-    #     if horizontal_tracking.count(horizontal) == 4:
-    #         gesture = 0
-    #         if horizontal_tracking == [0, 1, 0, -1, 0, 1, 0]:
-    #             gesture = 1
-    #         elif horizontal_tracking == [0, -1, 0, 1, 0, -1, 0]:
-    #             gesture = 2
-    #         horizontal_tracking = [horizontal]
-    #         gx = GX
-    #         # print(horizontal_tracking)
-    #     elif horizontal_tracking.count(horizontal) > 4:
-    #         gesture = 0
-    #         horizontal_tracking = [horizontal]
-    #         gx = GX
-    # ###############################################################
-    pass
+    velocity = 5
+    delta_stable_pivot = 3
+    delta = c_tx - c_trx
+    if delta < 0 and horizontal in [0x00, 0x10]:
+        adjustment = abs(L_GX - c_gx)
+        c_gx -= int(adjustment*0.1) if adjustment > 1 else 0
+        horizontal = 0x10
+    elif delta > 0 and horizontal in [0x00, 0x01]:
+        adjustment = abs(c_gx - R_GX)
+        c_gx += int(adjustment*0.1) if adjustment > 1 else 0
+        horizontal = 0x01
+    elif delta == 0 and delta_stable < delta_stable_pivot:
+        delta_stable += 1
+    elif delta == 0 and delta_stable >= delta_stable_pivot:
+        horizontal = 0x00
     # ###############################################################
     tracking_rectangle = (c_tx, c_ty, tw, th)
     gesture_rectangle = (c_gx, c_gy)
