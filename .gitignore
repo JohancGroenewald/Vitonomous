@@ -67,3 +67,4 @@ venvp2/
 venvp3/
 /Vitonomous/recordings/
 *.avi
+/Vitonomous/experiments/code.py
