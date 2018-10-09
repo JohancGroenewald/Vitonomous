@@ -3,6 +3,8 @@ import numpy as np
 import math
 import datetime
 
+verbose = 1
+# ###################################################################
 ip = '192.168.0.140'
 port = 8000
 user = 'admin'
@@ -11,25 +13,32 @@ stream_type = 'videostream.cgi'
 auth = '?user={}&password={}'.format(user, password)
 url = 'http://{0}:{1}/{2}{3}'.format(ip, port, stream_type, auth)
 wait_delay = 2
-
+# ###################################################################
 record = False
 fps = 16
 four_cc = cv2.VideoWriter.fourcc(*'DIVX')
 in_color = True
 # ###################################################################
-verbose = 1
+color_white = (255, 255, 255)
+color_blue = (255, 0, 0)
 # ###################################################################
 capture = cv2.VideoCapture(url)
 stream_out = None
 # ###################################################################
+h, w, c = None, None, None
 tx, ty, tw, th = None, None, None, None
-GX, GY, GW, GH = None, None, None, None
+c_tx, c_ty = None, None
+GW, GH = None, None
+L_GX, R_GX, C_GX = None, None, None
+T_GY, B_GY, C_GY = None, None, None
 # ###################################################################
 horizontal = 0
 horizontal_tracking = [0]
 # ###################################################################
 tracking_rectangle = None
 gesture_rectangle = None
+# ###################################################################
+gesture = 0
 # ###################################################################
 g_scale = 0.15
 # ###################################################################
@@ -42,14 +51,16 @@ signal_y_record = []
 grabbed, re_frame = capture.read()
 if grabbed:
     h, w, c = re_frame.shape
-    tx, ty, tw, th = 0, 0, w, h
-    tracking_rectangle = (tx, ty, tw, th)
-    GX, GY, GW, GH = int(w//2-w*g_scale//2), \
-                     int(h//2-h*g_scale//2), \
-                     int(w*g_scale), \
-                     int(h*g_scale)
-    gesture_rectangle = (GX, GY, GW, GH)
-    record_shape = w, h
+    record_shape = (w, h)
+
+    c_tx, c_ty = w//2, h//2
+    tx, ty, tw, th = c_tx-1, c_ty-1, c_tx+1, c_ty+1
+    tracking_rectangle = (c_tx, c_ty, tw, th)
+
+    GW, GH = int(w*g_scale//2), int(h*g_scale//2)
+    C_GX, C_GY = w//2, h//2
+    L_GX, R_GX = C_GX - C_GX//2, C_GX + C_GX//2
+    gesture_rectangle = (C_GX, C_GY)
 
 while grabbed:
     grabbed, frame_in = capture.read()
@@ -76,62 +87,85 @@ while grabbed:
         boundary = cv2.boundingRect(np.array(indices))
         tx, ty, tw, th = boundary
     # ###############################################################
-    color_white = (255, 255, 255)
-    thickness = 1
-    rtx, rty, rtw, rth = tracking_rectangle
-    c_rtx, c_rty = rtx+rtw//2, rty+rth//2
-    gx, gy, gw, gh = gesture_rectangle
-    c_gx, c_gy = gx+gw//2, gy+gh//2
+    c_tx, c_ty = tx+tw//2, ty+th//2
+    c_trx, c_try, trw, trh = tracking_rectangle
+    c_gx, c_gy = gesture_rectangle
     # moving ########################################################
     velocity = 3
-    delta = rtx+rtw - c_gx
-    if delta < 0 and horizontal <= 0:
-        delta = abs(delta)
-        adjust = delta if delta < velocity else velocity
-        gx -= adjust
-        horizontal = -1
-        if horizontal_tracking[-1] != horizontal:
-            horizontal_tracking.append(horizontal)
-            print(horizontal_tracking)
-    elif delta > 0 and horizontal >= 0:
-        delta = abs(delta)
-        adjust = delta if delta < velocity else velocity
-        gx += adjust
-        horizontal = +1
-        if horizontal_tracking[-1] != horizontal:
-            horizontal_tracking.append(horizontal)
-            print(horizontal_tracking)
-    else:
-        horizontal = 0
-        if horizontal_tracking[-1] != horizontal:
-            horizontal_tracking.append(horizontal)
-            print(horizontal_tracking)
-        if horizontal_tracking.count(horizontal) > 3:
-            if horizontal_tracking == [0, 1, 0, -1, 0, 1, 0]:
-                print('SELECT >>')
-            elif horizontal_tracking == [0, -1, 0, 1, 0, -1, 0]:
-                print('SELECT <<')
-            horizontal_tracking = [horizontal]
-            print(horizontal_tracking)
-
+    # delta = tx - rtx
+    # if delta < 0 and horizontal <= 0:
+    #     delta = abs(delta)
+    #     adjust = delta if delta < velocity else velocity
+    #     gx -= adjust
+    #     horizontal = -1
+    #     if horizontal_tracking[-1] != horizontal:
+    #         horizontal_tracking.append(horizontal)
+    #         print(horizontal_tracking)
+    # elif delta > 0 and horizontal >= 0:
+    #     delta = abs(delta)
+    #     adjust = delta if delta < velocity else velocity
+    #     gx += adjust
+    #     horizontal = +1
+    #     if horizontal_tracking[-1] != horizontal:
+    #         horizontal_tracking.append(horizontal)
+    #         print(horizontal_tracking)
+    # else:
+    #     horizontal = 0
+    #     if horizontal_tracking[-1] != horizontal:
+    #         horizontal_tracking.append(horizontal)
+    #         print(horizontal_tracking)
+    #     if horizontal_tracking.count(horizontal) == 4:
+    #         gesture = 0
+    #         if horizontal_tracking == [0, 1, 0, -1, 0, 1, 0]:
+    #             gesture = 1
+    #         elif horizontal_tracking == [0, -1, 0, 1, 0, -1, 0]:
+    #             gesture = 2
+    #         horizontal_tracking = [horizontal]
+    #         gx = GX
+    #         # print(horizontal_tracking)
+    #     elif horizontal_tracking.count(horizontal) > 4:
+    #         gesture = 0
+    #         horizontal_tracking = [horizontal]
+    #         gx = GX
     # ###############################################################
-    gesture_rectangle = (gx, GY, GW, GH)
+    pass
     # ###############################################################
-    tracking_rectangle = (tx, ty, tw, th)
+    tracking_rectangle = (c_tx, c_ty, tw, th)
+    gesture_rectangle = (c_gx, c_gy)
+    # ###############################################################
     if verbose:
+        tx, ty = c_tx-tw//2, c_ty-th//2
         color = color_white
+        thickness = 1
         cv2.rectangle(
             frame_out, (tx, ty), (tx + tw, ty + th), color, thickness
         )
     # ###############################################################
-    color_blue = (255, 0, 0)
-    gx, gy, gw, gh = gesture_rectangle
     if verbose:
+        gx, gy, gw, gh = c_gx-GW, c_gy-GH, GW, GH
         color = color_blue
         thickness = 2
         cv2.rectangle(
             frame_out, (gx, gy), (gx + gw, gy + gh), color, thickness
         )
+    # ###############################################################
+    if verbose and gesture > 0:
+        text = None
+        if gesture == 1:
+            text = 'SELECT >>'
+        elif gesture == 2:
+            text = 'SELECT <<'
+        if text:
+            text_size_wh, _ = cv2.getTextSize(
+                text, cv2.FONT_HERSHEY_SIMPLEX, 1, 2
+            )
+            tw, th = text_size_wh
+            origin = (w//2-tw//2, h-th)
+            cv2.putText(
+                frame_out, text, origin,
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2,
+                cv2.LINE_AA
+            )
     # ###############################################################
     cv2.imshow('IP Camera', frame_out)
     # ###############################################################
