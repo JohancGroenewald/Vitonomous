@@ -59,10 +59,11 @@ while grabbed:
     # frame_out = diff_frame
     frame_out = frame_in.copy()
     face_frame = imutils.resize(frame_out, width=400)
+    fh, fw = face_frame.shape[:2]
     # ###############################################################
     if skip_frames_counter >= skip_frames:
         skip_frames_counter = 0
-        fh, fw = face_frame.shape[:2]
+
         blob = cv2.dnn.blobFromImage(
             cv2.resize(face_frame, (300, 300)),
             1.0,
@@ -103,7 +104,10 @@ while grabbed:
     # ###############################################################
     # ###############################################################
     for (startX, startY, endX, endY, _confidence) in faces:
-        text = "{:.2f}%".format(_confidence * 100)
+        text = "{:.2f}%, {:.2f}%".format(
+            _confidence * 100,
+            ((endX-startX)*(endY-startY))//(fh*fw)*100
+        )
         _y = startY - 10 if startY - 10 > 10 else startY + 10
         cv2.rectangle(
             face_frame, (startX, startY), (endX, endY), (255, 0, 0), 1
@@ -123,6 +127,25 @@ while grabbed:
         cv2.rectangle(
             face_frame, (h_x, h_y), (h_xx, h_yy), (255, 255, 0), 2
         )
+        # ###############################################################
+        diff_frame = imutils.resize(diff_frame, width=400)
+        kernel = np.ones((5, 5), np.float32) / 25
+        diff_frame = diff_frame[h_y:h_yy, h_x:h_xx]
+        if diff_frame is not None and len(diff_frame) > 0:
+            diff_frame = cv2.filter2D(diff_frame, -1, kernel)
+            if diff_frame is not None and len(diff_frame) > 0:
+                raw_indices = np.nonzero(diff_frame > 32)
+                indices = [(x,y) for x,y in zip(raw_indices[1], raw_indices[0])]
+                indices = [] if indices is None else indices
+                if indices:
+                    boundary = cv2.boundingRect(np.array(indices))
+                    tx, ty, tw, th = boundary
+                    tx, ty = tx+h_x, ty+h_y
+                    thickness = 1
+                    cv2.rectangle(
+                        face_frame, (tx, ty), (tx + tw, ty + th), color_white, thickness
+                    )
+        # ###############################################################
     # ###############################################################
     frame_out = imutils.resize(face_frame, width=w, height=h)
     # ###############################################################
