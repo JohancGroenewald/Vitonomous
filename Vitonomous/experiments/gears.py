@@ -4,6 +4,8 @@ import numpy as np
 import math
 import datetime
 
+from machine import Rectangle
+
 verbose = 1
 # ###################################################################
 print("[INFO] loading model...")
@@ -58,17 +60,15 @@ while grabbed:
     # ###############################################################
     # frame_out = diff_frame
     frame_out = frame_in.copy()
+    # ###############################################################
     face_frame = imutils.resize(frame_out, width=400)
     fh, fw = face_frame.shape[:2]
+    face_frame_rectangle = Rectangle().from_w_h(w=fw, h=fh)
     # ###############################################################
     if skip_frames_counter >= skip_frames:
         skip_frames_counter = 0
-
         blob = cv2.dnn.blobFromImage(
-            cv2.resize(face_frame, (300, 300)),
-            1.0,
-            (300, 300),
-            (104.0, 177.0, 123.0)
+            cv2.resize(face_frame, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0)
         )
         net.setInput(blob)
         detections = net.forward()
@@ -86,7 +86,12 @@ while grabbed:
                 # object
                 box = detections[0, 0, i, 3:7] * np.array([fw, fh, fw, fh])
                 (startX, startY, endX, endY) = box.astype("int")
-                new_faces.append((startX, startY, endX, endY, detection_confidence))
+                rectangle = Rectangle().from_x_y_xx_yy(startX, startY, endX, endY)
+                face_area = rectangle.area_of(face_frame_rectangle)
+                # if 0.01 < face_area < 3.00:
+                new_faces.append((
+                    rectangle, detection_confidence
+                ))
                 # (startX, startY, endX, endY) = box.astype("int")
                 # draw the bounding box of the face along with the associated
                 # probability
@@ -103,34 +108,51 @@ while grabbed:
         skip_frames_counter += 1
     # ###############################################################
     # ###############################################################
-    for (startX, startY, endX, endY, _confidence) in faces:
+    for (rectangle, _confidence) in faces:
         text = "{:.2f}%, {:.2f}%".format(
             _confidence * 100,
-            ((endX-startX)*(endY-startY))/(fw*fh)*100
+            rectangle.area_of(face_frame_rectangle) * 100
         )
-        _y = startY - 10 if startY - 10 > 10 else startY + 10
+        _y = rectangle.y - 10 if rectangle.y - 10 > 10 else rectangle.y + 10
         cv2.rectangle(
-            face_frame, (startX, startY), (endX, endY), (255, 0, 0), 1
+            face_frame, rectangle.get_XY(), rectangle.get_XXYY(), (255, 0, 0), 1
         )
         cv2.putText(
-            face_frame, text, (startX, _y), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 0, 0), 1
+            face_frame, text, (rectangle.x, _y), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 0, 0), 1
         )
-        c_fx, c_fy = startX+((endX-startX)//2), endY
-        h_w, h_h = 2, int((endY - startY)*0.1)
-        h_x, h_y, h_xx, h_yy = c_fx-h_w, c_fy, c_fx+h_w, c_fy+h_h
+        # ###############################################################
+        l_rectangle = Rectangle().from_side_of(
+            rectangle, 3, x_offset=0.5, w=2, h=int(rectangle.h*0.1)
+        )
+        # c_fx, c_fy = startX+((endX-startX)//2), endY
+        # h_w, h_h = 2, int((endY - startY)*0.1)
+        # h_x, h_y, h_xx, h_yy = c_fx-h_w, c_fy, c_fx+h_w, c_fy+h_h
         cv2.rectangle(
-            face_frame, (h_x, h_y), (h_xx, h_yy), (255, 0, 0), 1
+            face_frame, l_rectangle.get_XY(), l_rectangle.get_XXYY(), (255, 0, 0), 1
         )
-        c_fx, c_fy = c_fx, h_yy
-        h_w, h_h = int((endX - startX)*3), int((endY - startY)*1.5)
-        h_x, h_y, h_xx, h_yy = c_fx-h_w, c_fy, c_fx+h_w, c_fy+h_h
+        # ###############################################################
+        g_rectangle = Rectangle().from_side_of(
+            l_rectangle, 3, x_offset=0.5, w=int(rectangle.w*6), h=int(rectangle.h*1.5)
+        )
+        # c_fx, c_fy = c_fx, h_yy
+        # h_w, h_h = int((endX - startX)*3), int((endY - startY)*1.5)
+        # h_x, h_y, h_xx, h_yy = c_fx-h_w, c_fy, c_fx+h_w, c_fy+h_h
         cv2.rectangle(
-            face_frame, (h_x, h_y), (h_xx, h_yy), (255, 255, 0), 2
+            face_frame, g_rectangle.get_XY(), g_rectangle.get_XXYY(), (255, 255, 0), 2
         )
+        # ###############################################################
+        # c_fx, c_fy = c_fx, h_yy
+        # h_w, h_h = int((endX - startX)*3), int((endY - startY)*1.5)
+        # h_x, h_y, h_xx, h_yy = c_fx-h_w, c_fy, c_fx+h_w, c_fy+h_h
+        # cv2.rectangle(
+        #     face_frame, (h_x, h_y), (h_xx, h_yy), (255, 255, 0), 2
+        # )
         # ###############################################################
         diff_frame = imutils.resize(diff_frame, width=400)
         kernel = np.ones((5, 5), np.float32) / 25
-        diff_frame = diff_frame[h_y:h_yy, h_x:h_xx]
+        diff_frame = diff_frame[
+            g_rectangle.y:g_rectangle.yy, g_rectangle.x:g_rectangle.xx
+        ]
         if diff_frame is not None and len(diff_frame) > 0:
             diff_frame = cv2.filter2D(diff_frame, -1, kernel)
             if diff_frame is not None and len(diff_frame) > 0:
@@ -139,11 +161,15 @@ while grabbed:
                 indices = [] if indices is None else indices
                 if indices:
                     boundary = cv2.boundingRect(np.array(indices))
-                    tx, ty, tw, th = boundary
-                    tx, ty = tx+h_x, ty+h_y
+                    h_rectangle = Rectangle().from_x_y_w_h(*boundary)
+                    h_rectangle.translate(g_rectangle.x, g_rectangle.y)
                     thickness = 1
                     cv2.rectangle(
-                        face_frame, (tx, ty), (tx + tw, ty + th), color_white, thickness
+                        face_frame,
+                        h_rectangle.get_XY(),
+                        h_rectangle.get_XXYY(),
+                        color_white,
+                        thickness
                     )
         # ###############################################################
     # ###############################################################
