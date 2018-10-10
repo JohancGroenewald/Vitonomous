@@ -68,3 +68,5 @@ venvp3/
 /Vitonomous/recordings/
 *.avi
 /Vitonomous/experiments/code.py
+/Vitonomous/experiments/deploy.prototxt
+/Vitonomous/experiments/res10_300x300_ssd_iter_140000_fp16.caffemodel
