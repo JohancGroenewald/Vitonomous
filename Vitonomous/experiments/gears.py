@@ -106,7 +106,7 @@ while grabbed:
     for (startX, startY, endX, endY, _confidence) in faces:
         text = "{:.2f}%, {:.2f}%".format(
             _confidence * 100,
-            ((endX-startX)*(endY-startY))//(fh*fw)*100
+            ((endX-startX)*(endY-startY))/(fw*fh)*100
         )
         _y = startY - 10 if startY - 10 > 10 else startY + 10
         cv2.rectangle(
