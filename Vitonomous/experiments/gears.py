@@ -75,38 +75,24 @@ while grabbed:
         # ###############################################################
         new_faces = []
         for i in range(0, detections.shape[2]):
-            # extract the confidence (i.e., probability) associated with the
-            # prediction
             detection_confidence = detections[0, 0, i, 2]
-            # print(confidence)
-            # filter out weak detections by ensuring the `confidence` is
-            # greater than the minimum confidence
             if detection_confidence > confidence:
-                # compute the (x, y)-coordinates of the bounding box for the
-                # object
                 box = detections[0, 0, i, 3:7] * np.array([fw, fh, fw, fh])
                 (startX, startY, endX, endY) = box.astype("int")
                 rectangle = Rectangle().from_x_y_xx_yy(startX, startY, endX, endY)
                 face_area = rectangle.area_of(face_frame_rectangle)
-                # if 0.01 < face_area < 3.00:
-                new_faces.append((
-                    rectangle, detection_confidence
-                ))
-                # (startX, startY, endX, endY) = box.astype("int")
-                # draw the bounding box of the face along with the associated
-                # probability
-                # text = "{:.2f}%".format(confidence * 100)
-                # y = startY - 10 if startY - 10 > 10 else startY + 10
-                # cv2.rectangle(face_frame, (startX, startY), (endX, endY),
-                #     (255, 0, 0), 1)
-                # cv2.putText(face_frame, text, (startX, y),
-                #     cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 0, 0), 1)
+                if 0.01 <= face_area <= 0.03:
+                    new_faces.append((
+                        rectangle, detection_confidence
+                    ))
         if len(new_faces) > 0:
             faces = new_faces
         # ###############################################################
     else:
         skip_frames_counter += 1
     # ###############################################################
+    diff_frame = imutils.resize(diff_frame, width=400)
+    kernel = np.ones((5, 5), np.float32) / 25
     # ###############################################################
     for (rectangle, _confidence) in faces:
         text = "{:.2f}%, {:.2f}%".format(
@@ -124,9 +110,6 @@ while grabbed:
         l_rectangle = Rectangle().from_side_of(
             rectangle, 3, x_offset=0.5, w=2, h=int(rectangle.h*0.1)
         )
-        # c_fx, c_fy = startX+((endX-startX)//2), endY
-        # h_w, h_h = 2, int((endY - startY)*0.1)
-        # h_x, h_y, h_xx, h_yy = c_fx-h_w, c_fy, c_fx+h_w, c_fy+h_h
         cv2.rectangle(
             face_frame, l_rectangle.get_XY(), l_rectangle.get_XXYY(), (255, 0, 0), 1
         )
@@ -134,9 +117,6 @@ while grabbed:
         g_rectangle = Rectangle().from_side_of(
             l_rectangle, 3, x_offset=0.5, w=int(rectangle.w*6), h=int(rectangle.h*1.5)
         )
-        # c_fx, c_fy = c_fx, h_yy
-        # h_w, h_h = int((endX - startX)*3), int((endY - startY)*1.5)
-        # h_x, h_y, h_xx, h_yy = c_fx-h_w, c_fy, c_fx+h_w, c_fy+h_h
         cv2.rectangle(
             face_frame, g_rectangle.get_XY(), g_rectangle.get_XXYY(), (255, 255, 0), 2
         )
@@ -148,15 +128,16 @@ while grabbed:
         #     face_frame, (h_x, h_y), (h_xx, h_yy), (255, 255, 0), 2
         # )
         # ###############################################################
-        diff_frame = imutils.resize(diff_frame, width=400)
-        kernel = np.ones((5, 5), np.float32) / 25
         diff_frame = diff_frame[
             g_rectangle.y:g_rectangle.yy, g_rectangle.x:g_rectangle.xx
         ]
+        face_frame[
+            g_rectangle.y:g_rectangle.yy, g_rectangle.x:g_rectangle.xx
+        ] = cv2.cvtColor(diff_frame, cv2.COLOR_GRAY2BGR)
         if diff_frame is not None and len(diff_frame) > 0:
             diff_frame = cv2.filter2D(diff_frame, -1, kernel)
             if diff_frame is not None and len(diff_frame) > 0:
-                raw_indices = np.nonzero(diff_frame > 32)
+                raw_indices = np.nonzero(diff_frame > 16)
                 indices = [(x,y) for x,y in zip(raw_indices[1], raw_indices[0])]
                 indices = [] if indices is None else indices
                 if indices:
