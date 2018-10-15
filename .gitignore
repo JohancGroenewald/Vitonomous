@@ -70,3 +70,4 @@ venvp3/
 /Vitonomous/experiments/code.py
 /Vitonomous/experiments/deploy.prototxt
 /Vitonomous/experiments/res10_300x300_ssd_iter_140000_fp16.caffemodel
+/image_slicer/
