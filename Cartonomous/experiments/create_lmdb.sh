@@ -2,12 +2,13 @@
 # Create the imagenet lmdb inputs
 # N.B. set the path to the imagenet train + val data dirs
 set -e
+set -x
 
 LMDB=lmdb
 DATA=data
 
-TRAIN_DATA_ROOT=train/
-VAL_DATA_ROOT=val/
+TRAIN_DATA_ROOT=/home/johan/cartonomous/train/
+VAL_DATA_ROOT=/home/johan/cartonomous/val/
 
 # Set RESIZE=true to resize the images to 256x256. Leave as false if images have
 # already been resized using another tool.
