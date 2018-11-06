@@ -1,18 +1,28 @@
+import pickle
+
 import numpy as np
 
 
 class Classifications:
     IS_NAC = 0
-    IS_PATH = 1
-    IS_LIMIT = 2
-    IS_ENVIRONMENT = 3
+    IS_CLASS_1 = 1
+    IS_CLASS_2 = 2
+    IS_CLASS_3 = 3
+    IS_CLASS_4 = 4
+    IS_CLASS_5 = 5
+    IS_CLASS_6 = 6
+    IS_CLASS_7 = 7
+    IS_CLASS_8 = 8
+    IS_CLASS_9 = 9
 
     @staticmethod
     def name(index):
-        return ['NAC', 'PATH', 'LIMIT', 'ENVIRONMENT'][index]
+        return 'NAC' if index == 0 else 'CLASS_{}'.format(index)
 
 
 class NearestNeighbor:
+    FILE_NAME = 'nearest_neighbor.pickle'
+
     def __init__(self):
         self.Xtr = None
         self.ytr = None
@@ -32,3 +42,13 @@ class NearestNeighbor:
             min_index = np.argmin(distance)
             Ypred[i] = self.ytr[min_index]
         return Ypred
+
+    def save(self):
+        with open(self.FILE_NAME,'wb') as outfile:
+            pickle.dump(self.Xtr, outfile)
+            pickle.dump(self.ytr, outfile)
+
+    def load(self):
+        with open(self.FILE_NAME,'rb') as infile:
+            self.Xtr = pickle.load(infile)
+            self.ytr = pickle.load(infile)

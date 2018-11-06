@@ -28,10 +28,11 @@ class WindowStream(object):
 
 
 class VideoStream(object):
-    def __init__(self, url, grab=True, auto_grab=False):
+    def __init__(self, url, grab=True, auto_grab=False, resize=None):
         self.capture = cv2.VideoCapture(url)
         self.grab = grab
         self.auto_grab = auto_grab
+        self.resize = resize
         self.shadow_frame = None
         self._color_frame = None
         self._gray_frame = None
@@ -42,6 +43,8 @@ class VideoStream(object):
     def load(self):
         grabbed, self.shadow_frame = self.capture.read()
         if grabbed:
+            if self.resize is not None:
+                self.shadow_frame = cv2.resize(self.shadow_frame, self.resize)
             self._color_frame = self.shadow_frame.copy()
             self._gray_frame = cv2.cvtColor(self._color_frame, cv2.COLOR_BGR2GRAY)
             self.h, self.w, self.d = self._color_frame.shape
@@ -53,6 +56,8 @@ class VideoStream(object):
         else:
             grabbed = True
         if grabbed:
+            if self.resize is not None:
+                self.shadow_frame = cv2.resize(self.shadow_frame, self.resize)
             self._color_frame = self.shadow_frame.copy()
             self._gray_frame = cv2.cvtColor(self._color_frame, cv2.COLOR_BGR2GRAY)
             self.grab = self.auto_grab
