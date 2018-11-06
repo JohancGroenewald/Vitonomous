@@ -66,7 +66,7 @@ cv2.setMouseCallback(window_name, coordinate_store.select_point)
 video_source = r'S:\Development\CartonomousSources\sources\golfbaan_strand\videos\*.mp4'
 
 videos = glob.glob(video_source)
-video_url = videos[2]
+video_url = videos[3]
 
 print('Opening frame stream')
 processing_window = 25
@@ -86,6 +86,8 @@ nearest_neighbor = NearestNeighbor()
 grab_next = True
 auto_grab_next = False
 trained = False
+extended_training = False
+# ###################################################################
 grabbed, re_frame = capture.read()
 if grabbed:
     h, w, d = re_frame.shape
@@ -189,29 +191,31 @@ while grabbed:
             hide_set.append(Classifier.IS_PATH)
         else:
             hide_set.remove(Classifier.IS_PATH)
-    if key == ord('2'):
+    elif key == ord('2'):
         if not trained:
             coordinate_store.state = Classifier.IS_LIMIT
         elif Classifier.IS_LIMIT not in hide_set:
             hide_set.append(Classifier.IS_LIMIT)
         else:
             hide_set.remove(Classifier.IS_LIMIT)
-    if key == ord('3'):
+    elif key == ord('3'):
         if not trained:
             coordinate_store.state = Classifier.IS_ENVIRONMENT
         elif Classifier.IS_ENVIRONMENT not in hide_set:
             hide_set.append(Classifier.IS_ENVIRONMENT)
         else:
             hide_set.remove(Classifier.IS_ENVIRONMENT)
-    if key == ord('q'):
+    elif key == ord('q'):
         break
-    if key == ord('n'):
+    elif key == ord('n'):
         grab_next = True
-    if key == ord('r'):
+    elif key == ord('r'):
         auto_grab_next = not auto_grab_next
-    if key == ord('t') and trained is True:
+    elif key == ord('t') and trained is True:
+        grab_next = True
         trained = False
-    if key == ord('t') and trained is False:
+        extended_training = True
+    elif key == ord('t') and trained is False:
         train_X = np.zeros(shape=(len(coordinate_store.points), s_h*s_w))
         train_y = np.ones(shape=(len(coordinate_store.points)))
         for i, point in enumerate(coordinate_store.points):
@@ -228,7 +232,7 @@ while grabbed:
         nearest_neighbor.train(train_X, train_y)
         grab_next = True
         trained = True
-    if key == ord('s'):
+    elif key == ord('s'):
         pass
         # if session_url is None:
         #      session_url = os.path.join(Sources.ROOT, Sources.SOURCE, Sources.TILES, session_directory)
