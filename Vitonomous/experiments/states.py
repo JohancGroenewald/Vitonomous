@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 from engines import VideoStream, RectangleStream, WindowStream
-from datasets import DataSet
+from datasets import TrainingSet
 from classifiers import Classifications, NearestNeighbor
 
 import color_constants as cc
@@ -11,7 +11,7 @@ import color_constants as cc
 # noinspection PyAttributeOutsideInit,PyArgumentList
 class StateManager(object):
     def __init__(self, video_stream: VideoStream, rectangle_stream: RectangleStream, window_stream: WindowStream,
-                 training_set: DataSet):
+                 training_set: TrainingSet):
         self.video_stream = video_stream
         self.rectangle_stream = rectangle_stream
         self.window_stream = window_stream
@@ -127,15 +127,16 @@ class StateManager(object):
     # ##################################################################################################################
     def state_manager_callback(self, event, x, y):
         if self.classify:
-            sub_frame = self.rectangle_stream.sub_frame_from_xy(self.video_stream.gray_frame(), x, y)
-            if sub_frame is not None:
-                self.push_sub_frame(sub_frame)
-                print('+')
+            self.validate_class_selection(x, y)
     # ##################################################################################################################
 
-    def push_sub_frame(self, sub_frame):
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        self.training_set.push(self.classification, sub_frame.ravel())
+    def validate_class_selection(self, x, y):
+        sub_frame = self.rectangle_stream.sub_frame_from_xy(self.video_stream.gray_frame(), x, y)
+        if sub_frame is not None:
+            self.push_sub_frame(sub_frame, self.video_stream.frame_counter)
+
+    def push_sub_frame(self, sub_frame, frame_counter):
+        self.training_set.push(frame_counter, self.classification, sub_frame.ravel())
 
     def state_toggle_classification(self):
         self.classify = not self.classify

@@ -3,8 +3,7 @@ import glob
 from sources import video_source
 from engines import WindowStream, VideoStream, RectangleStream
 from states import StateManager
-from datasets import DataSet
-from classifiers import Classifications, NearestNeighbor
+from datasets import TrainingSet
 
 available_videos = [
     (100, '20181018_151747.mp4'),          # 0
@@ -30,7 +29,7 @@ video_stream = VideoStream(video_url, grab=False, resize=(800, 500))
 if video_stream.load():
     rectangle_stream = RectangleStream(video_stream.wh(), 8, 8, 10)
     window_stream = WindowStream('Camera Stream', frame_rate)
-    training_set = DataSet()
+    training_set = TrainingSet()
     state = StateManager(video_stream, rectangle_stream, window_stream, training_set)
 while True:
     # noinspection PyUnboundLocalVariable
