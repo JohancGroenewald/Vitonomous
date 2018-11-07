@@ -6,6 +6,7 @@ class DataSet(object):
 
     def __init__(self):
         self.database = {}
+        self.selection_database = {}
 
     def __len__(self):
         length = sum([len(values) for values in self.database.values()])

@@ -28,40 +28,60 @@ class WindowStream(object):
 
 
 class VideoStream(object):
-    def __init__(self, url, grab=True, auto_grab=False, resize=None):
+    def __init__(self, url, grab=True, auto_grab=False, resize=None, flip=None):
         self.capture = cv2.VideoCapture(url)
         self.grab = grab
         self.auto_grab = auto_grab
         self.resize = resize
+        self.flip = flip
         self.shadow_frame = None
         self._color_frame = None
         self._gray_frame = None
         self.h = None
         self.w = None
         self.d = None
+        self.frame_counter = 0
 
     def load(self):
-        grabbed, self.shadow_frame = self.capture.read()
-        if grabbed:
-            if self.resize is not None:
-                self.shadow_frame = cv2.resize(self.shadow_frame, self.resize)
-            self._color_frame = self.shadow_frame.copy()
-            self._gray_frame = cv2.cvtColor(self._color_frame, cv2.COLOR_BGR2GRAY)
+        if self.read_frame():
             self.h, self.w, self.d = self._color_frame.shape
-        return grabbed
+            return True
+        return False
 
     def next(self):
         if self.grab or self.auto_grab:
-            grabbed, self.shadow_frame = self.capture.read()
+            grabbed = self.read_frame()
         else:
             grabbed = True
+            self.copy_frames()
         if grabbed:
+            self.grab = self.auto_grab
+            self.post_processing()
+        return grabbed
+
+    def read_frame(self):
+        grabbed, self.shadow_frame = self.capture.read()
+        if grabbed:
+            self.frame_counter += 1
             if self.resize is not None:
                 self.shadow_frame = cv2.resize(self.shadow_frame, self.resize)
-            self._color_frame = self.shadow_frame.copy()
-            self._gray_frame = cv2.cvtColor(self._color_frame, cv2.COLOR_BGR2GRAY)
-            self.grab = self.auto_grab
+            if self.flip is not None:
+                self.shadow_frame = cv2.flip(self.shadow_frame, self.flip)
+            self.copy_frames()
         return grabbed
+
+    def copy_frames(self):
+        self._gray_frame = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2GRAY)
+        self.post_processing()
+        self._color_frame = cv2.cvtColor(self._gray_frame, cv2.COLOR_GRAY2BGR)
+
+    def post_processing(self):
+        # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+        # self._gray_frame = cv2.erode(self._gray_frame, kernel, iterations=2)
+        # self._gray_frame = cv2.dilate(self._gray_frame, kernel, iterations=1)
+        # self._gray_frame = cv2.fastNlMeansDenoising(self._gray_frame, None, 1, 3)
+        # self._gray_frame = cv2.GaussianBlur(self._gray_frame , (3, 3), 3)
+        pass
 
     def color_frame(self):
         return self._color_frame

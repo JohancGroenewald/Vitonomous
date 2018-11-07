@@ -67,6 +67,8 @@ class StateManager(object):
         self.hidden_classes_set = []
         self.blank = False
         # ##############################################################################################################
+        self.classify_session = []
+        # ##############################################################################################################
         self.class_colors = [
             cc.BLACK,         # 0
             cc.BLUE,          # 1
@@ -122,12 +124,18 @@ class StateManager(object):
             self.state_toggle_blanking()
         return True
 
+    # ##################################################################################################################
     def state_manager_callback(self, event, x, y):
         if self.classify:
             sub_frame = self.rectangle_stream.sub_frame_from_xy(self.video_stream.gray_frame(), x, y)
             if sub_frame is not None:
-                self.training_set.push(self.classification, sub_frame.ravel())
+                self.push_sub_frame(sub_frame)
                 print('+')
+    # ##################################################################################################################
+
+    def push_sub_frame(self, sub_frame):
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        self.training_set.push(self.classification, sub_frame.ravel())
 
     def state_toggle_classification(self):
         self.classify = not self.classify
@@ -155,7 +163,6 @@ class StateManager(object):
 
     # ##################################################################################################################
     def state_run_training(self):
-        print()
         print('MODE: Training...', end='')
         self.train_classifier_nearest_neighbor()
         print('done')
@@ -195,17 +202,15 @@ class StateManager(object):
             train_y[i] = keys[i]
         self.classifier.train(train_X, train_y)
 
-    def show_predictions(self):
-        if self.grid_enabled:
-            self.rectangle_stream.render_on(self.video_stream.color_frame())
-        if self.classify or len(self.classifier) == 0:
-            return
+    def query_classifier(self):
         X = np.zeros(shape=(len(self.rectangle_stream), self.rectangle_stream.area))
         for i, rectangle in enumerate(self.rectangle_stream):
             x_l, x_r, y_t, y_b = rectangle[0], rectangle[2], rectangle[1], rectangle[3]
             frame = self.video_stream.gray_frame()[y_t:y_b, x_l:x_r]
             X[i, :] = frame.ravel()
-        predictions = self.classifier.predict(X)
+        return self.classifier.predict(X)
+
+    def show_predictions(self, predictions):
         for i, rectangle in enumerate(self.rectangle_stream):
             prediction = int(predictions[i])
             if prediction in self.hidden_classes_set:
@@ -218,3 +223,19 @@ class StateManager(object):
                 radius = 3
                 class_color = self.class_colors[prediction]
                 cv2.circle(self.video_stream.color_frame(), point, radius, class_color.BGR(), thickness=-1)
+
+    def show_grid(self):
+        if self.grid_enabled:
+            self.rectangle_stream.render_on(self.video_stream.color_frame())
+
+    def show_classification_selection(self):
+        # class en offset
+        pass
+
+    def show(self):
+        self.show_grid()
+        if self.classify:
+            self.show_classification_selection()
+        elif len(self.classifier) > 0:
+            predictions = self.query_classifier()
+            self.show_predictions(predictions)

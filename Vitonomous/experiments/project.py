@@ -28,7 +28,7 @@ video_url = videos[video_index]
 print('Project opened')
 video_stream = VideoStream(video_url, grab=False, resize=(800, 500))
 if video_stream.load():
-    rectangle_stream = RectangleStream(video_stream.wh(), 16, 16, 10)
+    rectangle_stream = RectangleStream(video_stream.wh(), 8, 8, 10)
     window_stream = WindowStream('Camera Stream', frame_rate)
     training_set = DataSet()
     state = StateManager(video_stream, rectangle_stream, window_stream, training_set)
@@ -37,7 +37,7 @@ while True:
     if not video_stream.next():
         break
     # noinspection PyUnboundLocalVariable
-    state.show_predictions()
+    state.show()
     # noinspection PyUnboundLocalVariable
     key = window_stream.show(video_stream.color_frame())
     # noinspection PyUnboundLocalVariable
