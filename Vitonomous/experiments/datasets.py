@@ -27,12 +27,14 @@ class TrainingSet(object):
         else:
             self.database[index] = {key: [value]}
 
-    def flatten(self):
+    def flatten(self, index=None):
         keys = []
         values = []
-        for index in self.database:
-            for key in self.database[index]:
-                for value in self.database[index][key]:
+        for i in self.database:
+            if index is not None and i != index:
+                continue
+            for key in self.database[i]:
+                for value in self.database[i][key]:
                     keys.append(key)
                     values.append(value)
         return keys, values

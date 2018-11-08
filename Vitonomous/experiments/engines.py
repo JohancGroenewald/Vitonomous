@@ -1,3 +1,4 @@
+import numpy as np
 from itertools import chain
 
 import cv2
@@ -23,7 +24,7 @@ class WindowStream(object):
     def show(self, frame, wait_delay=None):
         cv2.imshow(self.window_name, frame)
         delay = self.wait_delay if wait_delay is None else wait_delay
-        key = cv2.waitKey(delay) & 0xFF
+        key = cv2.waitKeyEx(delay)
         return key
 
 
@@ -72,11 +73,42 @@ class VideoStream(object):
         return grabbed
 
     def post_processing(self):
-        self._gray_frame = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2GRAY)
+        # self._gray_frame = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2GRAY)
         # do gray image processing
+        # ##############################################################################################################
+        # yuv_frame = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2YUV)
+        # # equalize the histogram of the Y channel
+        # yuv_frame[:, :, 0] = cv2.equalizeHist(yuv_frame[:, :, 0])
+        # # convert the YUV image back to RGB format
+        # self._gray_frame = cv2.cvtColor(
+        #     cv2.cvtColor(yuv_frame, cv2.COLOR_YUV2BGR),
+        #     cv2.COLOR_BGR2GRAY
+        # )
+        # ##############################################################################################################
+        # kernel_3x3 = np.ones((3, 3), np.float32) / 9
+        # self._gray_frame = cv2.cvtColor(
+        #     cv2.filter2D(self.shadow_frame, -1, kernel_3x3),
+        #     cv2.COLOR_BGR2GRAY
+        # )
+        # ##############################################################################################################
+        temp_image = self.shadow_frame
+        kernel_3x3 = np.ones((3, 3), np.float32) / 9
+        # temp_image = cv2.filter2D(temp_image, -1, kernel_3x3)
+
+        # temp_image = cv2.cvtColor(temp_image, cv2.COLOR_BGR2YUV)
+        b, g, r = cv2.split(temp_image)
+
+        # b = cv2.filter2D(b, -1, kernel_3x3)
+
+        self._gray_frame = cv2.absdiff(b, g)
+        # self._gray_frame = cv2.absdiff(b, r)
+        # self._gray_frame = cv2.absdiff(g, r)
+
+        # self._gray_frame = cv2.absdiff(b, cv2.absdiff(g, r))
 
     def assign_color_frame(self):
-        self._color_frame = cv2.cvtColor(self._gray_frame, cv2.COLOR_GRAY2BGR)
+        # self._color_frame = cv2.cvtColor(self._gray_frame, cv2.COLOR_GRAY2BGR)
+        self._color_frame = self.shadow_frame.copy()
 
     def color_frame(self):
         return self._color_frame
@@ -95,10 +127,11 @@ class VideoStream(object):
 
 
 class RectangleStream(object):
-    def __init__(self, wh, r_w, r_h, rows=-1, margin=-1):
+    def __init__(self, wh, shape, bottom=-1, rows=-1, margin=-1):
         self.w, self.h = wh
-        self.r_w = r_w
-        self.r_h = r_h
+        self.shape = shape
+        self.r_w, self.r_h = shape
+        self.bottom = bottom
         self.rows = rows
         self.margin = margin
         self.area = self.r_w * self.r_h
@@ -109,6 +142,8 @@ class RectangleStream(object):
         self.m_tl = self.m_br = None
         self.current = None
         self.high = None
+        self.locked = False
+        self.grid_shape = None
         self.build()
         self.select()
 
@@ -126,20 +161,28 @@ class RectangleStream(object):
             ] for y in range(self.y_range)
         ]
         self.rectangles.reverse()
+        if self.bottom == -1:
+            self.bottom = 0
+        if self.rows == -1:
+            self.rows = self.y_range
+        if self.margin == -1:
+            self.margin = 0
+        self.grid_shape = (self.bottom, self.rows, self.margin, self.x_range-self.margin)
 
     def select(self, rows: int=0, margin: int=0):
-        self.rows += rows
-        self.margin += margin
-        if self.margin == 0:
-            self.margin += margin
-        if self.rows == -1:
-            s1, s2 = 0, -1
+        s1, s2, s3, s4 = self.grid_shape
+        if self.locked:
+            s1 += rows
+            s2 += rows
+            s3 -= margin
+            s4 -= margin
         else:
-            s1, s2 = 0, self.rows
-        if self.margin == -1:
-            s3, s4 = 0, len(self.rectangles[0])
-        else:
-            s3, s4 = self.margin, len(self.rectangles[0])-self.margin
+            s2 += rows
+            s3 += margin
+            s4 -= margin
+        # ##############################################################################################################
+        self.grid_shape = (s1, s2, s3, s4)
+        # ##############################################################################################################
         self.rectangles_flattened = [row[s3:s4] for row in self.rectangles[s1:s2]]
         self.rectangles_flattened = list(chain.from_iterable(self.rectangles_flattened))
         self.current = 0
@@ -148,7 +191,7 @@ class RectangleStream(object):
     def render_on(self, frame):
         for i, rectangle in enumerate(self.rectangles_flattened):
             tl, br = (rectangle[0], rectangle[1]), (rectangle[2], rectangle[3])
-            cv2.rectangle(frame, tl, br, cc.YELLOW1.BGR(), 1)
+            cv2.rectangle(frame, tl, br, cc.LIGHTYELLOW1.BGR(), 1)
 
     def sub_frame_from_xy(self, frame, x, y):
         l_x, _, _, l_yy = self.rectangles_flattened[0]
@@ -162,11 +205,15 @@ class RectangleStream(object):
             rectangle = self.rectangles_flattened[offset]
             x_l, x_r, y_t, y_b = rectangle[0], rectangle[2], rectangle[1], rectangle[3]
             # #########################################################################
-            return frame[y_t:y_b, x_l:x_r]
-        return None
+            x, y = self.center(rectangle)
+            return (x, y), frame[y_t:y_b, x_l:x_r]
+        return None, None
 
     def center(self, rectangle):
         return rectangle[0]+self.r_w//2, rectangle[1]+self.r_h//2
+
+    def toggle_locked(self):
+        self.locked = not self.locked
 
     def __len__(self):
         return len(self.rectangles_flattened)

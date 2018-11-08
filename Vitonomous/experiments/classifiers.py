@@ -14,6 +14,17 @@ class Classifications:
     IS_CLASS_7 = 7
     IS_CLASS_8 = 8
     IS_CLASS_9 = 9
+    IS_CLASS_10 = 10
+    IS_CLASS_11 = 11
+    IS_CLASS_12 = 12
+    IS_CLASS_13 = 13
+    IS_CLASS_14 = 14
+    IS_CLASS_15 = 15
+    IS_CLASS_16 = 16
+    IS_CLASS_17 = 17
+    IS_CLASS_18 = 18
+    IS_CLASS_19 = 19
+    IS_CLASS_20 = 20
 
     @staticmethod
     def name(index):
