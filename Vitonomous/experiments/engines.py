@@ -73,17 +73,15 @@ class VideoStream(object):
         return grabbed
 
     def post_processing(self):
+        temp_image = self.shadow_frame
         # self._gray_frame = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2GRAY)
         # do gray image processing
         # ##############################################################################################################
-        # yuv_frame = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2YUV)
+        # yuv_frame = cv2.cvtColor(temp_image , cv2.COLOR_BGR2YUV)
         # # equalize the histogram of the Y channel
         # yuv_frame[:, :, 0] = cv2.equalizeHist(yuv_frame[:, :, 0])
         # # convert the YUV image back to RGB format
-        # self._gray_frame = cv2.cvtColor(
-        #     cv2.cvtColor(yuv_frame, cv2.COLOR_YUV2BGR),
-        #     cv2.COLOR_BGR2GRAY
-        # )
+        # temp_image = cv2.cvtColor(yuv_frame, cv2.COLOR_YUV2BGR)
         # ##############################################################################################################
         # kernel_3x3 = np.ones((3, 3), np.float32) / 9
         # self._gray_frame = cv2.cvtColor(
@@ -91,24 +89,53 @@ class VideoStream(object):
         #     cv2.COLOR_BGR2GRAY
         # )
         # ##############################################################################################################
-        temp_image = self.shadow_frame
+        # temp_image = yuv_frame
         kernel_3x3 = np.ones((3, 3), np.float32) / 9
+        kernel_9x9 = np.ones((9, 9), np.float32) / 9
         # temp_image = cv2.filter2D(temp_image, -1, kernel_3x3)
 
         # temp_image = cv2.cvtColor(temp_image, cv2.COLOR_BGR2YUV)
         b, g, r = cv2.split(temp_image)
 
-        # b = cv2.filter2D(b, -1, kernel_3x3)
+        # b = cv2.filter2D(b, -1, kernel_9x9)
+        # g = cv2.filter2D(b, -1, kernel_3x3)
+        # r = cv2.filter2D(b, -1, kernel_3x3)
 
-        self._gray_frame = cv2.absdiff(b, g)
+        # self._gray_frame = cv2.filter2D(self._gray_frame, -1, kernel_3x3)
+
+        # self._gray_frame = cv2.absdiff(b, g)
         # self._gray_frame = cv2.absdiff(b, r)
         # self._gray_frame = cv2.absdiff(g, r)
 
+        # temp_image = cv2.absdiff(b, g)
+        # temp_image = cv2.absdiff(b, r)
+        # temp_image = cv2.absdiff(g, r)
+        # temp_image = cv2.bitwise_or(temp_image, b)
+        # temp_image = cv2.bitwise_or(cv2.bitwise_or(b, g), r)
+        # temp_image = cv2.bitwise_xor(temp_image, b)
+
+        # werk mooi
+        # temp_image = cv2.absdiff(b, g)
+        # temp_image = cv2.absdiff(g, r)
+        # temp_image = cv2.bitwise_xor(temp_image, b)
+
+        # yuv_frame = cv2.cvtColor(temp_image , cv2.COLOR_BGR2YUV)
+        # # equalize the histogram of the Y channel
+        # yuv_frame[:, :, 0] = cv2.equalizeHist(yuv_frame[:, :, 0])
+        # # convert the YUV image back to RGB format
+        # temp_image = cv2.cvtColor(yuv_frame, cv2.COLOR_YUV2BGR)
+
+        self._gray_frame = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2GRAY)
+
         # self._gray_frame = cv2.absdiff(b, cv2.absdiff(g, r))
+        # ##############################################################################################################
+        # self._gray_frame = cv2.cvtColor(cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2HLS), cv2.COLOR_BGR2GRAY)
+        # ##############################################################################################################
 
     def assign_color_frame(self):
-        # self._color_frame = cv2.cvtColor(self._gray_frame, cv2.COLOR_GRAY2BGR)
-        self._color_frame = self.shadow_frame.copy()
+        self._color_frame = cv2.cvtColor(self._gray_frame, cv2.COLOR_GRAY2BGR)
+        # self._color_frame = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2HSV)
+        # self._color_frame = self.shadow_frame.copy()
 
     def color_frame(self):
         return self._color_frame
@@ -124,6 +151,30 @@ class VideoStream(object):
 
     def toggle_grab(self):
         self.grab = not self.grab
+
+
+class AreaOfInterest(object):
+    def __init__(self, r_w1, r_w2, r_h, shape, color):
+        s_w, s_h = shape
+        self.color = color
+        s_h -= 3
+        w1, w2, h = s_w * r_w1, s_w * r_w2, s_h * r_h
+        x1, y1 = (s_w-w1)//2, s_h-h
+        x3 = s_w-((s_w-w2)//2)
+        self.xy1, self.xy2 = (int(x1), int(y1)), (int(x1+w1), int(y1))
+        self.xy3, self.xy4 = (int(x3), int(s_h)), (int(x3-w2), int(s_h))
+        points = np.array([self.xy1, self.xy2, self.xy3, self.xy4], np.int32)
+        self.points = [points.reshape((-1, 1, 2))]
+
+    def reshape(self, aoi_l, aoi_r):
+
+        aoi_l.reverse()
+        aoi_l.extend(aoi_r)
+        points = np.array(aoi_l, np.int32)
+        self.points = [points.reshape((-1, 1, 2))]
+
+    def render(self, frame):
+        cv2.polylines(frame, self.points, True, self.color.BGR(), 4, lineType=cv2.LINE_AA)
 
 
 class RectangleStream(object):
@@ -169,9 +220,9 @@ class RectangleStream(object):
             self.margin = 0
         self.grid_shape = (self.bottom, self.rows, self.margin, self.x_range-self.margin)
 
-    def select(self, rows: int=0, margin: int=0):
+    def select(self, rows: int=0, margin: int=0, locked: bool=False):
         s1, s2, s3, s4 = self.grid_shape
-        if self.locked:
+        if locked:
             s1 += rows
             s2 += rows
             s3 -= margin
@@ -194,13 +245,15 @@ class RectangleStream(object):
             cv2.rectangle(frame, tl, br, cc.LIGHTYELLOW1.BGR(), 1)
 
     def sub_frame_from_xy(self, frame, x, y):
-        l_x, _, _, l_yy = self.rectangles_flattened[0]
-        _, l_y, l_xx, _ = self.rectangles_flattened[-1]
-        if l_x <= x <= l_xx and l_y <= y <= l_yy:
-            r = self.y_range-1-y//self.r_h
-            c = (x-l_x)//self.r_w
-            margin = 0 if self.margin == -1 else self.margin
-            offset = r*(self.x_range-margin*2)+c
+        l, _, _, b = self.rectangles_flattened[0]
+        _, t, r, _ = self.rectangles_flattened[-1]
+
+        if l <= x <= r and t <= y <= b:
+            row = (b-y)//self.r_h
+            column = (x-l)//self.r_w
+            s1, s2, s3, s4 = self.grid_shape
+            offset = row*(s4-s3)+column
+            # display(l, x, r, t, y, b, row, column, offset, s2, s1)
             # #########################################################################
             rectangle = self.rectangles_flattened[offset]
             x_l, x_r, y_t, y_b = rectangle[0], rectangle[2], rectangle[1], rectangle[3]

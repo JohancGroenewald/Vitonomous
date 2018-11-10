@@ -7,13 +7,13 @@ from states import StateManager
 
 available_videos = [
     (100, False,     '20181006_175023.mp4'),  # 0  <= Short but usable
-    (100, False,     '20181006_175105.mp4'),  # 1  <= Goeie data (Golfbaan)
-    (100, False,     '20181006_175204.mp4'),  # 2  <= Goeie data (Golfbaan)
-    (100, False,     '20181006_175546.mp4'),  # 3  <= Goeie data (Golfbaan)
+    (100, False,     '20181006_175105.mp4'),  # 1  <= Goeie data (Golfbaan) (Kort)
+    (100, False,     '20181006_175204.mp4'),  # 2  <= Goeie data (Golfbaan) (Lank)
+    (100, False,     '20181006_175546.mp4'),  # 3  <= Goeie data (Golfbaan) (Kort) (Hill parking)
     (100, False,     '20181006_175653.mp4'),  # 4  <= Goeie data (Golfbaan) (Lank)
-    (100, False,     '20181006_175934.mp4'),  # 5  <= Goeie data (Golfbaan)
+    (100, False,     '20181006_175934.mp4'),  # 5  <= Goeie data (Golfbaan) (Medium) (Grond pad)
     (100, False,     '20181006_180356.mp4'),  # 6  <= Goeie data (Golfbaan)
-    (100, False,     '20181006_180654.mp4'),  # 7  <= Goeie data (Golfbaan)
+    (100, False,     '20181006_180654.mp4'),  # 7  <= Goeie data (Golfbaan) (Kort)
     (100, False,     '20181006_180834.mp4'),  # 8  <= Goeie data (Golfbaan)
     (100, False,     '20181018_151747.mp4'),  # 9  <= Goeie data (Orchard)
     (100, False,     '20181018_152417.mp4'),  # 10 <= Unusable
@@ -42,7 +42,7 @@ window_title = '{} ({})'.format(video_file_name, video_name)
 print('Project opened')
 video_stream = VideoStream(video_url, grab=False, resize=(800, 500))
 if video_stream.load():
-    rectangle_stream = RectangleStream(video_stream.wh(), (8, 16), rows=15, margin=20)
+    rectangle_stream = RectangleStream(video_stream.wh(), (16, 16), rows=15, margin=20)
     window_stream = WindowStream(window_title, frame_rate)
     state = StateManager(video_stream, rectangle_stream, window_stream)
 while True:

@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-from engines import VideoStream, RectangleStream, WindowStream
+from engines import VideoStream, RectangleStream, WindowStream, AreaOfInterest
 from datasets import TrainingSet
 from classifiers import Classifications, NearestNeighbor
 
@@ -14,59 +14,55 @@ class StateManager(object):
         self.video_stream = video_stream
         self.rectangle_stream = rectangle_stream
         self.window_stream = window_stream
+        # ##############################################################################################################
         self.training_set = TrainingSet()
         self.classification_set = TrainingSet()
+        self.driving_aoi = AreaOfInterest(0.5, 0.7, 0.5, self.video_stream.wh(), cc.WHITE)
+        self.tracking_aoi = AreaOfInterest(0.1, 0.1, 0.5, self.video_stream.wh(), cc.YELLOW1)
         # ##############################################################################################################
         self.window_stream.attach_state_manager_callback(self.state_manager_callback)
         # ##############################################################################################################
-        self.key_quit = ord('q')
-        self.key_next = ord('n')
-        self.key_run = ord('r')
-        self.key_plus_rectangle_row = ord('=')
-        self.key_minus_rectangle_row = ord('-')
-        self.key_plus_rectangle_column = ord('+')
-        self.key_minus_rectangle_column = ord('_')
-        self.key_lock_rectangle = ord('\\')
-        # ##############################################################################################################
-        self.key_grid = ord('g')
-        # ##############################################################################################################
-        self.key_classify = ord('c')
-        self.key_train = ord('t')
-        self.key_predict = ord('p')
-        self.key_reset_classifications = ord('R')
-        self.key_save_classifications = ord('s')
-        self.key_load_classifications = ord('l')
-        self.key_0 = ord('0')
-        self.key_1 = ord('1')
-        self.key_2 = ord('2')
-        self.key_3 = ord('3')
-        self.key_4 = ord('4')
-        self.key_5 = ord('5')
-        self.key_6 = ord('6')
-        self.key_7 = ord('7')
-        self.key_8 = ord('8')
-        self.key_9 = ord('9')
-        self.key_list = [
-            self.key_0,
-            self.key_1,
-            self.key_2,
-            self.key_3,
-            self.key_4,
-            self.key_5,
-            self.key_6,
-            self.key_7,
-            self.key_8,
-            self.key_9,
-        ]
-        # ##############################################################################################################
-        self.key_enable_blanking = ord('B')
-        self.key_cycle_blanking = ord('b')
-        self.key_block_mode = 2
-        self.key_remember_class = 18
-        # ##############################################################################################################
-        self.key_generate = ord('j')
+        self.key_bindings = {
+            ord('q'): (self.quit_application, {}),
+            ord('n'): (self.video_stream.toggle_grab, {}),
+            ord('r'): (self.video_stream.toggle_auto_grab, {}),
+            ord('='): (self.rectangle_stream.select, {'rows': 1}),
+            ord('-'): (self.rectangle_stream.select, {'rows': -1}),
+            ord('+'): (self.rectangle_stream.select, {'margin': -1}),
+            ord('_'): (self.rectangle_stream.select, {'margin': 1}),
+            2490368: (self.rectangle_stream.select, {'rows': 1, 'locked': True}),
+            2621440: (self.rectangle_stream.select, {'rows': -1, 'locked': True}),
+            2424832: (self.rectangle_stream.select, {'margin': 1, 'locked': True}),
+            2555904: (self.rectangle_stream.select, {'margin': -1, 'locked': True}),
+            # ##########################################################################################################
+            ord('g'): (self.toggle_show_grid, {}),
+            ord('G'): (self.toggle_render_grid_content, {}),
+            # ##########################################################################################################
+            ord('c'): (self.state_toggle_classification, {}),
+            ord('t'): (self.state_run_training, {}),
+            # ord('p'): (pass, {}),
+            ord('R'): (self.state_reset_classifications, {}),
+            ord('s'): (self.state_save_classifications, {}),
+            ord('l'): (self.state_load_classifications, {}),
+            ord('B'): (self.state_toggle_blanking, {}),
+            ord('b'): (self.cycle_blanking, {}),
+            2: (self.cycle_block_mode, {}),     # ^b
+            18: (self.remember_class, {}),      # ^r
+            ord('j'): (self.classifications_generate, {}),
+            ord('0'): (self.state_select_classifications, {'key': 0}),
+            ord('1'): (self.state_select_classifications, {'key': 1}),
+            ord('2'): (self.state_select_classifications, {'key': 2}),
+            ord('3'): (self.state_select_classifications, {'key': 3}),
+            ord('4'): (self.state_select_classifications, {'key': 4}),
+            ord('5'): (self.state_select_classifications, {'key': 5}),
+            ord('6'): (self.state_select_classifications, {'key': 6}),
+            ord('7'): (self.state_select_classifications, {'key': 7}),
+            ord('8'): (self.state_select_classifications, {'key': 8}),
+            ord('9'): (self.state_select_classifications, {'key': 9}),
+        }
         # ##############################################################################################################
         self.grid_enabled = True
+        self.grid_rendered = True
         # ##############################################################################################################
         self.classify = False
         self.classification = Classifications.IS_CLASS_1
@@ -103,72 +99,18 @@ class StateManager(object):
             cc.WHITE,       # 21
         ]
         # ##############################################################################################################
-        self.supported_classes = Classifications.IS_CLASS_19
+        self.supported_classes = Classifications.IS_CLASS_3
         self.re_key = 0
         # ##############################################################################################################
 
     def accept(self, key):
-        if key == self.re_key:
-            return
-        self.re_key = key
-        # (flags&0xFFFF==cv2.EVENT_FLAG_CTRLKEY)
-        # ctrl_key = True if key == 17 else False
-        # print('------------------------')
-        # print('key    : {}'.format(key))
-        # print('key 16  : {}'.format(key & 0xFF))
-        # print('key 32 : {}'.format(key & 0xFFFF))
-        # print('key 64 : {}'.format(key & 0xFFFFFFFF))
-
-        key = key & 0xFF
-        # ##############################################################################################################
-        if key == self.key_quit:
-            return False
-        # ##############################################################################################################
-        elif key == self.key_next:
-            self.video_stream.toggle_grab()
-        elif key == self.key_run:
-            self.video_stream.toggle_auto_grab()
-        elif key == self.key_plus_rectangle_row:
-            self.rectangle_stream.select(1)
-        elif key == self.key_minus_rectangle_row:
-            self.rectangle_stream.select(-1)
-        elif key == self.key_plus_rectangle_column:
-            self.rectangle_stream.select(margin=-1)
-        elif key == self.key_minus_rectangle_column:
-            self.rectangle_stream.select(margin=1)
-        elif key == self.key_lock_rectangle:
-            self.rectangle_stream.toggle_locked()
-        # ##############################################################################################################
-        elif key == self.key_grid:
-            self.grid_enabled = not self.grid_enabled
-        # ##############################################################################################################
-        elif key == self.key_classify:
-            self.state_toggle_classification()
-        elif key == self.key_train:
-            self.state_run_training()
-        elif key == self.key_predict:
+        if key == -1:
             pass
-        elif key in self.key_list:
-            self.state_select_classifications(key)
-        # ##############################################################################################################
-        elif key == self.key_reset_classifications:
-            self.state_reset_classifications()
-        elif key == self.key_save_classifications:
-            self.state_save_classifications()
-        elif key == self.key_load_classifications:
-            self.state_load_classifications()
-        # ##############################################################################################################
-        elif key == self.key_generate:
-            self.classifications_generate()
-        # ##############################################################################################################
-        elif key == self.key_enable_blanking:
-            self.state_toggle_blanking()
-        elif key == self.key_cycle_blanking:
-            self.cycle_blanking()
-        elif key == self.key_block_mode:
-            self.cycle_block_mode()
-        elif key == self.key_remember_class:
-            self.remember_class()
+        elif key in self.key_bindings:
+            method, kwargs = self.key_bindings[key]
+            return method(**kwargs)
+        else:
+            print('key: {} {} {}'.format(key, bin(key), hex(key)))
         return True
 
     # ##################################################################################################################
@@ -177,6 +119,17 @@ class StateManager(object):
             self.validate_class_selection(x, y)
     # ##################################################################################################################
 
+    @staticmethod
+    def quit_application():
+        return False
+
+    def toggle_show_grid(self):
+        self.grid_enabled = not self.grid_enabled
+
+    def toggle_render_grid_content(self):
+        self.grid_rendered = not self.grid_rendered
+
+    # ##################################################################################################################
     def validate_class_selection(self, x, y):
         xy, sub_frame = self.rectangle_stream.sub_frame_from_xy(self.video_stream.gray_frame(), x, y)
         if sub_frame is not None:
@@ -192,7 +145,8 @@ class StateManager(object):
     def classifications_generate(self):
         classes = self.supported_classes + 1
         class_sets = 2
-        s, t = 1, 227
+        # s, t = 1, 227
+        s, t = 0, 255
         slice = t/classes
         for c in range(classes):
             for r in range(class_sets):
@@ -273,6 +227,7 @@ class StateManager(object):
     def remember_class(self):
         if self.classification not in self.remembered_classes_set:
             self.remembered_classes_set.append(self.classification)
+        print(self.remembered_classes_set)
 
     def print_classifying(self, classification):
         color_name = list(cc.colors.keys())[list(cc.colors.values()).index(self.class_colors[classification])]
@@ -318,6 +273,30 @@ class StateManager(object):
                     radius = 3
                     cv2.circle(self.video_stream.color_frame(), point, radius, class_color.BGR(), thickness=-1)
 
+    def map_aoi(self, predictions, classes):
+        aoi_l = []
+        aoi_r = []
+        if len(self.rectangle_stream) == 0:
+            return aoi_l, aoi_r
+        re_xy = self.rectangle_stream.center(self.rectangle_stream.rectangles_flattened[0])
+        next_row = True
+        for i, rectangle in enumerate(self.rectangle_stream):
+            if predictions[i] not in classes:
+                continue
+            xy = self.rectangle_stream.center(rectangle)
+            if next_row:
+                aoi_l.append(re_xy if len(aoi_l) > 0 else xy)
+            next_row = re_xy[1] != xy[1]
+            if next_row:
+                if len(aoi_l) == len(aoi_r):
+                    aoi_l.append(re_xy)
+                aoi_r.append(re_xy)
+            re_xy = xy
+        samples = len(aoi_l)+len(aoi_r)
+        if samples > 0:
+            aoi_r.append(re_xy)
+        return samples, aoi_l, aoi_r
+
     def show_grid(self):
         if self.grid_enabled:
             self.rectangle_stream.render_on(self.video_stream.color_frame())
@@ -329,7 +308,6 @@ class StateManager(object):
             radius = 3
             class_color = self.class_colors[classification]
             cv2.circle(self.video_stream.color_frame(), point, radius, class_color.BGR(), thickness=-1)
-        pass
 
     def show(self):
         self.show_grid()
@@ -337,7 +315,13 @@ class StateManager(object):
             self.show_classification_selection()
         elif len(self.classifier) > 0:
             predictions = self.query_classifier()
-            self.show_predictions(predictions)
+            if self.grid_rendered:
+                self.show_predictions(predictions)
+            # self.driving_aoi.render(self.video_stream.color_frame())
+            samples, aoi_l, aoi_r = self.map_aoi(predictions, self.remembered_classes_set)
+            if samples > 0:
+                self.tracking_aoi.reshape(aoi_l, aoi_r)
+                self.tracking_aoi.render(self.video_stream.color_frame())
 
     def save(self):
         pass
