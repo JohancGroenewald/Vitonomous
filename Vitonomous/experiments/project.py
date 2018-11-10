@@ -2,10 +2,10 @@ import glob
 import os
 
 from sources import video_source
-from engines import WindowStream, VideoStream, RectangleStream
+from engines import FileSelection, WindowStream, VideoStream, RectangleStream
 from states import StateManager
 
-available_videos = [
+video_list = [
     (100, False,     '20181006_175023.mp4'),  # 0  <= Short but usable
     (100, False,     '20181006_175105.mp4'),  # 1  <= Goeie data (Golfbaan) (Kort)
     (100, False,     '20181006_175204.mp4'),  # 2  <= Goeie data (Golfbaan) (Lank)
@@ -28,18 +28,11 @@ available_videos = [
     (100, False, 'StrandGolfbaan_a_03.mp4'),  # 19
     (100, False, 'StrandGolfbaan_b_01.mp4'),  # 20
 ]
-video_index = 4
-frame_rate, flip_frame, video_name = available_videos[video_index]
-videos = glob.glob(video_source)
-file_names = [os.path.basename(video) for video in videos]
-# max_length = max([len(name) for name in file_names])
-# for i, name in enumerate(file_names):
-#     print(("    ({}, {}, {: >"+str(max_length+2)+"}),  # {}").format(100, False, "'{}'".format(name), i))
-video_url = videos[video_index]
-video_file_name = os.path.basename(video_url)
-window_title = '{} ({})'.format(video_file_name, video_name)
+frame_rate, flip_frame, video_list_name, video_url, video_file_name = \
+    FileSelection(video_source, video_list).file_with_index(4)
 
 print('Project opened')
+window_title = '{} ({})'.format(video_file_name, video_list_name)
 video_stream = VideoStream(video_url, grab=False, resize=(800, 500))
 if video_stream.load():
     rectangle_stream = RectangleStream(video_stream.wh(), (16, 16), rows=15, margin=20)
