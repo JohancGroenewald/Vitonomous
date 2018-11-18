@@ -4,11 +4,14 @@ elements formatted: colors[colorname] = CONSTANT
 """
 
 from collections import namedtuple, OrderedDict
+from cv2 import cvtColor, COLOR_BGR2HSV
+import numpy as np
 
 Color = namedtuple('RGB', 'red, green, blue')
 colors = {}  # dict of colors
 
 
+# noinspection PyPep8Naming
 class RGB(Color):
 
     def hex_format(self):
@@ -19,6 +22,10 @@ class RGB(Color):
 
     def BGR(self):
         return self.blue, self.green, self.red
+
+    def HSV(self):
+        _color = np.uint8([[[self.blue, self.green, self.red]]])
+        return cvtColor(_color, COLOR_BGR2HSV)
 
 
 # Color Constants
@@ -143,7 +150,6 @@ DEEPSKYBLUE1 = RGB(0, 191, 255)
 DEEPSKYBLUE2 = RGB(0, 178, 238)
 DEEPSKYBLUE3 = RGB(0, 154, 205)
 DEEPSKYBLUE4 = RGB(0, 104, 139)
-DIMGRAY = RGB(105, 105, 105)
 DIMGRAY = RGB(105, 105, 105)
 DODGERBLUE1 = RGB(30, 144, 255)
 DODGERBLUE2 = RGB(28, 134, 238)

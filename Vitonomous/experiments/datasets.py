@@ -27,17 +27,24 @@ class TrainingSet(object):
         else:
             self.database[index] = {key: [value]}
 
-    def flatten(self, index=None):
+    def flatten(self, index=None, encoded_classes=0):
         keys = []
         values = []
+        labels = []
         for i in self.database:
             if index is not None and i != index:
                 continue
             for key in self.database[i]:
                 for value in self.database[i][key]:
-                    keys.append(key)
+                    if encoded_classes > 0:
+                        encoded = [0.01]*encoded_classes
+                        encoded[key-1] = 0.99
+                        keys.append(encoded)
+                    else:
+                        keys.append(key)
                     values.append(value)
-        return keys, values
+                    labels.append(key)
+        return keys, values, labels
 
     def save(self):
         with open(self.FILE_NAME,'wb') as outfile:

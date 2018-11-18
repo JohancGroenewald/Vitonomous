@@ -1,11 +1,9 @@
 import glob
 import os
-
-import numpy as np
 from itertools import chain
 
+import numpy as np
 import cv2
-from support import display
 import color_constants as cc
 
 
@@ -15,7 +13,9 @@ class FileSelection(object):
         self.source_list = source_list
 
     def file_with_index(self, index, verbose=0):
-        frame_rate, flip_frame, video_list_name = self.source_list[index]
+        frame_rate, flip_frame, video_list_name, shape, scale = self.source_list[index]
+        w, h = shape
+        shape = (int(w*scale), int(h*scale))
         videos = glob.glob(self.source_url)
         if verbose > 0:
             file_names = [os.path.basename(video) for video in videos]
@@ -24,18 +24,21 @@ class FileSelection(object):
                 print(("    ({}, {}, {: >"+str(max_length+2)+"}),  # {}").format(100, False, "'{}'".format(name), i))
         video_url = videos[index]
         video_file_name = os.path.basename(video_url)
-        return frame_rate, flip_frame, video_list_name, video_url, video_file_name
+        return frame_rate, flip_frame, shape, video_list_name, video_url, video_file_name
 
 
 class WindowStream(object):
     def __init__(self, window_name, frames_per_second):
         self.window_name = window_name
-        self.wait_delay = int(1000 / frames_per_second)
+        if frames_per_second == -1:
+            self.wait_delay = 1
+        else:
+            self.wait_delay = int(1000 / frames_per_second)
         self.state_manager_callback = None
         cv2.namedWindow(self.window_name)
 
     def mouse_callback(self, event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONUP:
+        if event == cv2.EVENT_LBUTTONUP or event == cv2.EVENT_MOUSEMOVE:
             self.state_manager_callback(event, x, y)
 
     def attach_state_manager_callback(self, state_manager_callback):
@@ -59,16 +62,19 @@ class VideoStream(object):
         self.shadow_frame = None
         self._color_frame = None
         self._gray_frame = None
+        self._view_frame = None
         self.h = None
         self.w = None
         self.d = None
         self.frame_counter = 0
+        self.color_view = True
+        self.kernel = None
 
     def load(self):
         if self.read_frame():
+            self.h, self.w, self.d = self.shadow_frame.shape
             self.post_processing()
-            self.assign_color_frame()
-            self.h, self.w, self.d = self._color_frame.shape
+            self.assign_view_frame()
             return True
         return False
 
@@ -80,7 +86,7 @@ class VideoStream(object):
         if grabbed:
             self.grab = self.auto_grab
             self.post_processing()
-            self.assign_color_frame()
+            self.assign_view_frame()
         return grabbed
 
     def read_frame(self):
@@ -94,65 +100,31 @@ class VideoStream(object):
         return grabbed
 
     def post_processing(self):
-        temp_image = self.shadow_frame
-        # self._gray_frame = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2GRAY)
-        # do gray image processing
-        # ##############################################################################################################
-        # yuv_frame = cv2.cvtColor(temp_image , cv2.COLOR_BGR2YUV)
-        # # equalize the histogram of the Y channel
-        # yuv_frame[:, :, 0] = cv2.equalizeHist(yuv_frame[:, :, 0])
-        # # convert the YUV image back to RGB format
-        # temp_image = cv2.cvtColor(yuv_frame, cv2.COLOR_YUV2BGR)
-        # ##############################################################################################################
-        # kernel_3x3 = np.ones((3, 3), np.float32) / 9
-        # self._gray_frame = cv2.cvtColor(
-        #     cv2.filter2D(self.shadow_frame, -1, kernel_3x3),
-        #     cv2.COLOR_BGR2GRAY
-        # )
-        # ##############################################################################################################
-        # temp_image = yuv_frame
-        kernel_3x3 = np.ones((3, 3), np.float32) / 9
-        kernel_9x9 = np.ones((9, 9), np.float32) / 9
-        # temp_image = cv2.filter2D(temp_image, -1, kernel_3x3)
+        # temp_image = self.shadow_frame
+        temp_image = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2GRAY)
+        # temp_image = cv2.blur(temp_image, (9, 9))
+        # temp_image = cv2.GaussianBlur(temp_image, (9, 9), 0)
+        # temp_image = cv2.medianBlur(temp_image, 5)
+        # temp_image = cv2.bilateralFilter(temp_image, 9, 75, 75)
+        # b, g, r = cv2.split(self.shadow_frame)
+        # b = np.multiply(b, 0.25, casting='safe')
+        # g = np.multiply(g, 0.50, casting='safe')
+        # r = np.multiply(r, 0.75, casting='safe')
+        # b = b.astype(dtype=np.uint8)
+        # g = g.astype(dtype=np.uint8)
+        # r = r.astype(dtype=np.uint8)
+        # temp_image = cv2.cvtColor(cv2.merge([b, g, r]), cv2.COLOR_BGR2GRAY)
+        self._gray_frame = temp_image
+        self._color_frame = self.shadow_frame.copy()
 
-        # temp_image = cv2.cvtColor(temp_image, cv2.COLOR_BGR2YUV)
-        b, g, r = cv2.split(temp_image)
+    def assign_view_frame(self):
+        if self.color_view:
+            self._view_frame = self.shadow_frame.copy()
+        else:
+            self._view_frame = cv2.cvtColor(self._gray_frame, cv2.COLOR_GRAY2BGR)
 
-        # b = cv2.filter2D(b, -1, kernel_9x9)
-        # g = cv2.filter2D(b, -1, kernel_3x3)
-        # r = cv2.filter2D(b, -1, kernel_3x3)
-
-        # self._gray_frame = cv2.filter2D(self._gray_frame, -1, kernel_3x3)
-
-        # self._gray_frame = cv2.absdiff(b, g)
-        # self._gray_frame = cv2.absdiff(b, r)
-        # self._gray_frame = cv2.absdiff(g, r)
-
-        # temp_image = cv2.absdiff(b, g)
-        # temp_image = cv2.absdiff(b, r)
-        # temp_image = cv2.absdiff(g, r)
-        # temp_image = cv2.bitwise_or(temp_image, b)
-        # temp_image = cv2.bitwise_or(cv2.bitwise_or(b, g), r)
-        # temp_image = cv2.bitwise_xor(temp_image, b)
-
-        # werk mooi
-        # temp_image = cv2.absdiff(b, g)
-        # temp_image = cv2.absdiff(g, r)
-        # temp_image = cv2.bitwise_xor(temp_image, b)
-
-        # yuv_frame = cv2.cvtColor(temp_image , cv2.COLOR_BGR2YUV)
-        # # equalize the histogram of the Y channel
-        # yuv_frame[:, :, 0] = cv2.equalizeHist(yuv_frame[:, :, 0])
-        # # convert the YUV image back to RGB format
-        # temp_image = cv2.cvtColor(yuv_frame, cv2.COLOR_YUV2BGR)
-
-        self._gray_frame = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2GRAY)
-
-        # self._gray_frame = cv2.absdiff(b, cv2.absdiff(g, r))  # ##############################################################################################################  # self._gray_frame = cv2.cvtColor(cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2HLS), cv2.COLOR_BGR2GRAY)  # ##############################################################################################################
-
-    def assign_color_frame(self):
-        self._color_frame = cv2.cvtColor(self._gray_frame,
-                                         cv2.COLOR_GRAY2BGR)  # self._color_frame = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2HSV)  # self._color_frame = self.shadow_frame.copy()
+    def pick_color(self, x, y):
+        return self._color_frame[y, x]
 
     def color_frame(self):
         return self._color_frame
@@ -160,14 +132,23 @@ class VideoStream(object):
     def gray_frame(self):
         return self._gray_frame
 
+    def view_frame(self):
+        return self._view_frame
+
     def wh(self):
         return self.w, self.h
+
+    def disable_auto_grab(self):
+        self.auto_grab = False
 
     def toggle_auto_grab(self):
         self.auto_grab = not self.auto_grab
 
     def toggle_grab(self):
         self.grab = not self.grab
+
+    def toggle_view(self):
+        self.color_view = not self.color_view
 
 
 class AreaOfInterest(object):
@@ -271,8 +252,8 @@ class RectangleStream(object):
             x_l, x_r, y_t, y_b = rectangle[0], rectangle[2], rectangle[1], rectangle[3]
             # #########################################################################
             x, y = self.center(rectangle)
-            return (x, y), frame[y_t:y_b, x_l:x_r]
-        return None, None
+            return offset, (x, y), frame[y_t:y_b, x_l:x_r, :]
+        return None, None, None
 
     def center(self, rectangle):
         return rectangle[0] + self.r_w // 2, rectangle[1] + self.r_h // 2
