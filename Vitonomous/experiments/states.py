@@ -5,7 +5,7 @@ from engines import VideoStream, RectangleStream, WindowStream, AreaOfInterest
 from datasets import TrainingSet
 from classifiers import Classifications, NearestNeighbor, NeuralNetwork
 from support import display
-from classifiers_mxnet import MxnetClassifier
+from classifiers_mxnet import MXNetClassifier
 
 import color_constants as cc
 
@@ -27,7 +27,7 @@ class StateManager(object):
         # CLASS 7: Cables
         # CLASS 8: Environment
         # ##############################################################################################################
-        self.classifier = MxnetClassifier(inputs=self.rectangle_stream.area, classes=self.supported_classes)
+        self.classifier = MXNetClassifier(inputs=self.rectangle_stream.area, classes=self.supported_classes)
         self.train_classifier = self.train_classifier_mxnet
         self.query_classifier = self.query_classifier_mxnet
         # ##############################################################################################################

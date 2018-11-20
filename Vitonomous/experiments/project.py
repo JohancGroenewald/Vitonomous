@@ -30,7 +30,7 @@ video_list = [
 ]
 frame_rate, flip_frame, wh, video_list_name, video_url, video_file_name = \
     FileSelection(video_source, video_list).file_with_index(
-        4
+        2
     )
 
 print('Project opened')

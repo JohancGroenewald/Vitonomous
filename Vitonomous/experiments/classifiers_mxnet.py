@@ -1,51 +1,43 @@
-import argparse
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
 import numpy as np
 import mxnet as mx
-from mxnet import gluon, autograd
+from mxnet import gluon, autograd, nd
 from mxnet.gluon import nn
-
-# Parse CLI arguments
-
-parser = argparse.ArgumentParser(description='MXNet Gluon MNIST Example')
-parser.add_argument('--batch-size', type=int, default=5,
-                    help='batch size for training and testing (default: 100)')
-parser.add_argument('--epochs', type=int, default=500,
-                    help='number of epochs to train (default: 10)')
-parser.add_argument('--lr', type=float, default=0.1,
-                    help='learning rate (default: 0.1)')
-parser.add_argument('--momentum', type=float, default=0.9,
-                    help='SGD momentum (default: 0.9)')
-parser.add_argument('--cuda', action='store_true', default=False,
-                    help='Train on GPU with CUDA')
-parser.add_argument('--log-interval', type=int, default=100, metavar='N',
-                    help='how many batches to wait before logging training status')
-opt = parser.parse_args()
+# noinspection PyUnresolvedReferences
+from mxnet.contrib.ndarray import MultiBoxPrior
 
 
-class MxnetClassifier:
+class MXNetClassifier:
+    BATCH_SIZE = 5
+    EPOCHS = 500
+    LEARNING_RATE = 0.1
+    MOMENTUM = 0.9
+    CUDA = False
+    LOG_INTERVAL = 100
+
     def __init__(self, inputs, classes):
         # define network
         # 'relu', 'sigmoid', 'softrelu', 'softsign', 'tanh'
-        # inputs *= 3
-        inputs = 512
+        inputs *= 3
+        dense_layer_inputs = 512
         self.net = nn.Sequential()
         with self.net.name_scope():
+            self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
             self.net.add(gluon.nn.Conv2D(channels=5, kernel_size=2))
             self.net.add(gluon.nn.BatchNorm(axis=1, center=True, scale=True))
             self.net.add(gluon.nn.Activation(activation='relu'))
             self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
 
-            self.net.add(gluon.nn.Conv2D(channels=10, kernel_size=2))
-            self.net.add(gluon.nn.BatchNorm(axis=1, center=True, scale=True))
-            self.net.add(gluon.nn.Activation(activation='relu'))
-            self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
+            # self.net.add(gluon.nn.Conv2D(channels=10, kernel_size=2))
+            # self.net.add(gluon.nn.BatchNorm(axis=1, center=True, scale=True))
+            # self.net.add(gluon.nn.Activation(activation='relu'))
+            # self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
 
             self.net.add(gluon.nn.Flatten())
 
-            self.net.add(nn.Dense(inputs))
+            self.net.add(nn.Dense(dense_layer_inputs))
             self.net.add(gluon.nn.BatchNorm(axis=1, center=True, scale=True))
             self.net.add(gluon.nn.Activation(activation='relu'))
 
@@ -120,7 +112,7 @@ class MxnetClassifier:
                 # update metric at last.
                 metric.update([label], [output])
 
-                if i % opt.log_interval == 0 and i > 0:
+                if i % self.LOG_INTERVAL == 0 and i > 0:
                     name, acc = metric.get()
                     print('[Epoch %d Batch %d] Training: %s=%f'%(epoch, i, name, acc))
 
@@ -153,9 +145,106 @@ class MxnetClassifier:
         return predictions
 
 
-# if __name__ == '__main__':
-#     if opt.cuda:
-#         ctx = mx.gpu(0)
-#     else:
-#         ctx = mx.cpu()
-#     train(opt.epochs, ctx)
+class MXNetSSD(gluon.Block):
+
+    def __init__(self, num_classes, **kwargs):
+        super(MXNetSSD, self).__init__(**kwargs)
+        # anchor box sizes for 4 feature scales
+        self.anchor_sizes = [[.2, .272], [.37, .447], [.54, .619], [.71, .79], [.88, .961]]
+        # anchor box ratios for 4 feature scales
+        self.anchor_ratios = [[1, 2, .5]] * 5
+        self.num_classes = num_classes
+
+        with self.name_scope():
+            self.body, self.downsamples, self.class_preds, self.box_preds = self.ssd_model(4, num_classes)
+
+    def forward(self, x):
+        default_anchors, predicted_classes, predicted_boxes = self.ssd_forward(
+            x, self.body, self.downsamples, self.class_preds, self.box_preds, self.anchor_sizes, self.anchor_ratios
+        )
+        # we want to concatenate anchors, class predictions, box predictions from different layers
+        anchors = self.concat_predictions(default_anchors)
+        box_preds = self.concat_predictions(predicted_boxes)
+        class_preds = self.concat_predictions(predicted_classes)
+        # it is better to have class predictions reshaped for softmax computation
+        class_preds = nd.reshape(class_preds, shape=(0, -1, self.num_classes + 1))
+
+        return anchors, class_preds, box_preds
+
+    @staticmethod
+    def ssd_forward(x, body, downsamples, class_preds, box_preds, sizes, ratios):
+        # extract feature with the body network
+        x = body(x)
+
+        # for each scale, add anchors, box and class predictions,
+        # then compute the input to next scale
+        default_anchors = []
+        predicted_boxes = []
+        predicted_classes = []
+
+        for i in range(5):
+            default_anchors.append(MultiBoxPrior(x, sizes=sizes[i], ratios=ratios[i]))
+            predicted_boxes.append(MXNetSSD.flatten_prediction(box_preds[i](x)))
+            predicted_classes.append(MXNetSSD.flatten_prediction(class_preds[i](x)))
+            if i < 3:
+                x = downsamples[i](x)
+            elif i == 3:
+                # simply use the pooling layer
+                x = nd.Pooling(x, global_pool=True, pool_type='max', kernel=(4, 4))
+
+        return default_anchors, predicted_classes, predicted_boxes
+
+    @staticmethod
+    def flatten_prediction(pred):
+        return nd.flatten(nd.transpose(pred, axes=(0, 2, 3, 1)))
+
+    @staticmethod
+    def concat_predictions(preds):
+        return nd.concat(*preds, dim=1)
+
+    @staticmethod
+    def class_predictor(num_anchors, num_classes):
+        """return a layer to predict classes"""
+        return nn.Conv2D(num_anchors * (num_classes + 1), 3, padding=1)
+
+    @staticmethod
+    def box_predictor(num_anchors):
+        """return a layer to predict delta locations"""
+        return nn.Conv2D(num_anchors * 4, 3, padding=1)
+
+    @staticmethod
+    def down_sample(num_filters):
+        """stack two Conv-BatchNorm-Relu blocks and then a pooling layer to halve the feature size"""
+        out = nn.HybridSequential()
+        for _ in range(2):
+            out.add(nn.Conv2D(num_filters, 3, strides=1, padding=1))
+            out.add(nn.BatchNorm(in_channels=num_filters))
+            out.add(nn.Activation('relu'))
+        out.add(nn.MaxPool2D(2))
+        return out
+
+    @staticmethod
+    def body():
+        """return the body network"""
+        out = nn.HybridSequential()
+        for nfilters in [16, 32, 64]:
+            out.add(MXNetSSD.down_sample(nfilters))
+        return out
+
+    @staticmethod
+    def ssd_model(num_anchors, num_classes):
+        """return SSD modules"""
+        downsamples = nn.Sequential()
+        class_preds = nn.Sequential()
+        box_preds = nn.Sequential()
+
+        downsamples.add(MXNetSSD.down_sample(128))
+        downsamples.add(MXNetSSD.down_sample(128))
+        downsamples.add(MXNetSSD.down_sample(128))
+
+        for scale in range(5):
+            class_preds.add(MXNetSSD.class_predictor(num_anchors, num_classes))
+            box_preds.add(MXNetSSD.box_predictor(num_anchors))
+
+        return MXNetSSD.body(), downsamples, class_preds, box_preds
+
