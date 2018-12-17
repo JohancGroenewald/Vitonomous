@@ -1,10 +1,11 @@
 import pickle
 
 
-class TrainingSet(object):
-    FILE_NAME = 'training_set.pickle'
+class TrainingSet1(object):
+    FILE_NAME = None
 
     def __init__(self):
+        self.FILE_NAME = f'{self.__class__.__name__}.pickle'
         self.database = {}
 
     def __len__(self):
@@ -27,6 +28,9 @@ class TrainingSet(object):
         else:
             self.database[index] = {key: [value]}
 
+    def pop(self, index):
+        raise NotImplementedError
+
     def flatten(self, index=None, encoded_classes=0):
         keys = []
         values = []
@@ -45,6 +49,63 @@ class TrainingSet(object):
                     values.append(value)
                     labels.append(key)
         return keys, values, labels
+
+    def save(self):
+        with open(self.FILE_NAME,'wb') as outfile:
+            pickle.dump(self.database, outfile)
+
+    def load(self):
+        with open(self.FILE_NAME,'rb') as infile:
+            self.database = pickle.load(infile)
+
+
+class TrainingSet2:
+    FILE_NAME = None
+
+    def __init__(self):
+        self.FILE_NAME = f'{self.__class__.__name__}.pickle'
+        self.database = []
+
+    def __len__(self):
+        return len(self.database)
+
+    def push(self, frame_number, classification, offset, xy, data):
+        self.database.append((frame_number, classification, offset, xy, data))
+
+    def pop(self, frame_number):
+        if len(self.database) > 0:
+            if self.database[-1][0] == frame_number:
+                self.database.pop()
+
+    def clear(self):
+        self.database.clear()
+
+    def flatten(self, frame_number=None, select=('data', 'labels')):
+        classification, offset, xy, data = [], [], [], []
+        if frame_number is None:
+            for (_frame_number, _classification, _offset, _xy, _data) in self.database:
+                classification.append(_classification)
+                offset.append(_offset)
+                xy.append(_xy)
+                data.append(_data)
+        else:
+            for (_frame_number, _classification, _offset, _xy, _data) in self.database:
+                if frame_number == _frame_number:
+                    classification.append(_classification)
+                    offset.append(_offset)
+                    xy.append(_xy)
+                    data.append(_data)
+        return_values = []
+        for selected in select:
+            if selected == 'labels':
+                return_values.append(classification)
+            elif selected == 'offset':
+                return_values.append(offset)
+            elif selected == 'xy':
+                return_values.append(xy)
+            elif selected == 'data':
+                return_values.append(data)
+        return tuple(return_values)
 
     def save(self):
         with open(self.FILE_NAME,'wb') as outfile:

@@ -14,33 +14,36 @@ class MXNetClassifier:
     EPOCHS = 500
     LEARNING_RATE = 0.1
     MOMENTUM = 0.9
-    CUDA = False
+    CUDA = True
     LOG_INTERVAL = 100
 
+
     def __init__(self, inputs, classes):
+        if self.CUDA:
+            self.ctx = mx.gpu(0)
+        else:
+            self.ctx = mx.cpu()
         # define network
         # 'relu', 'sigmoid', 'softrelu', 'softsign', 'tanh'
         inputs *= 3
-        dense_layer_inputs = 512
         self.net = nn.Sequential()
         with self.net.name_scope():
-            self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
-            self.net.add(gluon.nn.Conv2D(channels=5, kernel_size=2))
-            self.net.add(gluon.nn.BatchNorm(axis=1, center=True, scale=True))
-            self.net.add(gluon.nn.Activation(activation='relu'))
-            self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
-
-            # self.net.add(gluon.nn.Conv2D(channels=10, kernel_size=2))
-            # self.net.add(gluon.nn.BatchNorm(axis=1, center=True, scale=True))
-            # self.net.add(gluon.nn.Activation(activation='relu'))
             # self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
-
+            self.net.add(gluon.nn.Conv2D(channels=32*1, kernel_size=(3,3), padding=1, activation="relu"))
+            self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
+            #
+            # self.net.add(gluon.nn.Conv2D(channels=32*2, kernel_size=(3,3), padding=1, activation="relu"))
+            # self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
+            #
+            # self.net.add(gluon.nn.Conv2D(channels=32*3, kernel_size=(3,3), padding=1, activation="relu"))
+            # self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
+            #
             self.net.add(gluon.nn.Flatten())
 
-            self.net.add(nn.Dense(dense_layer_inputs))
-            self.net.add(gluon.nn.BatchNorm(axis=1, center=True, scale=True))
-            self.net.add(gluon.nn.Activation(activation='relu'))
+            self.net.add(nn.Dense(32*4, activation="relu"))
 
+            # self.net.add(nn.Dense(inputs, activation="relu"))
+            # self.net.add(nn.Dense(inputs//3, activation="relu"))
             self.net.add(nn.Dense(classes))
         self.len = 0
         self.dropout = np.random.rand(inputs)
@@ -68,19 +71,19 @@ class MXNetClassifier:
     #     batch_size=opt.batch_size, shuffle=False)
 
     # train
-    def test(self, val_data, ctx=mx.cpu()):
+    def test(self, val_data):
         metric = mx.metric.Accuracy()
         for data, label in val_data:
-            data = data.as_in_context(ctx)
-            label = label.as_in_context(ctx)
+            data = data.as_in_context(self.ctx)
+            label = label.as_in_context(self.ctx)
             output = self.net(data)
             metric.update([label], [output])
 
         return metric.get()
 
-    def train(self, dataset, epochs=10000, ctx=mx.cpu()):
+    def train(self, dataset, epochs=10000):
         train_data = gluon.data.DataLoader(dataset, batch_size=150, last_batch='keep', shuffle=True)
-        self.net.initialize(mx.init.Xavier(magnitude=2.5), ctx=ctx)
+        self.net.initialize(mx.init.Xavier(magnitude=2.5), ctx=self.ctx)
         trainer = gluon.Trainer(
             # self.net.collect_params(), 'adadelta', {'rho': 0.9, 'epsilon': 1e-05}
             # self.net.collect_params(), 'adagrad', {'eps': 1e-07}
@@ -94,13 +97,14 @@ class MXNetClassifier:
 
         re_acc = 0
         acc_stable = 0
+        acc_flat = 0
         for epoch in range(epochs):
             # reset data iterator and metric at begining of epoch.
             metric.reset()
             for i, (data, label) in enumerate(train_data):
                 # Copy data to ctx if necessary
-                data = data.as_in_context(ctx)
-                label = label.as_in_context(ctx)
+                data = data.as_in_context(self.ctx)
+                label = label.as_in_context(self.ctx)
                 # Start recording computation graph with record() section.
                 # Recorded graphs can then be differentiated with backward.
                 with autograd.record():
@@ -117,12 +121,18 @@ class MXNetClassifier:
                     print('[Epoch %d Batch %d] Training: %s=%f'%(epoch, i, name, acc))
 
             name, acc = metric.get()
-            if abs(acc - re_acc) <= 0.05:
+            acc_delta = acc - re_acc
+            if abs(acc_delta) <= 1e-5:
+                acc_flat += 1
+            elif abs(acc_delta) <= 0.05:
                 acc_stable += 1
             else:
                 acc_stable = 0
-            print('[Epoch %d] Training: %s=%f, acc_stable:%d'%(epoch, name, acc, acc_stable))
-            if acc_stable > 100:
+                acc_flat = 0
+            print('[Epoch {}] Training: {}={}, acc_stable:{}, acc_delta:{:f}, acc_flat:{}'.format(
+                epoch, name, acc, acc_stable, acc_delta, acc_flat
+            ))
+            if acc_stable > 100 or acc_flat > 10:
                 print('[Epoch {}] Acc stable exit'.format(epoch))
                 break
             re_acc = acc
@@ -134,11 +144,11 @@ class MXNetClassifier:
         self.len = 1
 
     # noinspection PyUnresolvedReferences
-    def predict(self, dataset, ctx=mx.cpu()):
+    def predict(self, dataset):
         pred_data = gluon.data.DataLoader(dataset, batch_size=200, last_batch='keep')
         predictions = []
         for data, label in pred_data:
-            data = data.as_in_context(ctx)
+            data = data.as_in_context(self.ctx)
             output = self.net(data)
             # predictions.extend(mx.nd.argmax(output, axis=1)[0])
             predictions.extend(output.asnumpy())
