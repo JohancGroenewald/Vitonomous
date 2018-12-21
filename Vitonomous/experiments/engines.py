@@ -6,6 +6,9 @@ import numpy as np
 import cv2
 import color_constants as cc
 from support import display
+from scipy.ndimage import median_filter
+from scipy.signal import convolve2d
+from sklearn.cluster import KMeans
 
 cv2.setUseOptimized(True)
 
@@ -104,95 +107,79 @@ class VideoStream(object):
 
     def read_frame(self):
         grabbed, self.shadow_frame = self.capture.read()
-        if grabbed:
-            self.frame_counter = self.capture.get(cv2.CAP_PROP_POS_FRAMES)
-            if self.resize is not None:
-                self.shadow_frame = cv2.resize(self.shadow_frame, self.resize)
-            if self.flip is not None:
-                self.shadow_frame = cv2.flip(self.shadow_frame, self.flip)
+        if grabbed is False:
+            self.shadow_frame = self.re_shadow_frame.copy()
+        self.frame_counter = self.capture.get(cv2.CAP_PROP_POS_FRAMES)
+        if self.resize is not None:
+            self.shadow_frame = cv2.resize(self.shadow_frame, self.resize)
+        if self.flip is not None:
+            self.shadow_frame = cv2.flip(self.shadow_frame, self.flip)
         return grabbed
 
     def post_processing(self):
         temp_image = self.shadow_frame
-        if self.kernel is not None:
-            temp_image = cv2.cvtColor(temp_image, cv2.COLOR_BGR2GRAY)
-            # re_temp_image = temp_image.copy()
-            if self.cache is False:
-                # self.cache = True
-                # xy, frame = self.kernel
-                # # print(type(self.kernel))
-                # l, u = np.min(frame), np.max(frame)
-                # lu = abs(l-u)
-                # condition_l = temp_image > l
-                # condition_u = temp_image < u
-                # temp_image[condition_l == condition_u] = lu
-                # temp_image[temp_image < lu] = 0+32
-                # temp_image[temp_image > lu] = 255-32
-                # temp_image[temp_image == re_temp_image] = 128
-                # temp_image[condition_u] = 0
-                # l = np.sort(np.unique(temp_image))
-                # r = l[1:]
-                # l = l[:-1]
-                # d = r-l
-                temp_image = cv2.medianBlur(temp_image, 3)
-                l = temp_image.flat
-                r = l[1:]
-                r = np.append(r, l[-1])
-                r = np.sort(r)
-                d = r+l
-                d[d > 128] = 64
-                temp_image = d.reshape(temp_image.shape)
-                # temp_image = cv2.Canny(temp_image, threshold1=500, threshold2=500)
-                # lines = cv2.HoughLines(temp_image, 1, np.pi/360, 100, 30, 10)
-                # for rho,theta in lines[0]:
-                #     a = np.cos(theta)
-                #     b = np.sin(theta)
-                #     x0 = a*rho
-                #     y0 = b*rho
-                #     x1 = int(x0 + 1000*(-b))
-                #     y1 = int(y0 + 1000*(a))
-                #     x2 = int(x0 - 1000*(-b))
-                #     y2 = int(y0 - 1000*(a))
-                #
-                #     cv2.line(temp_image, (x1,y1), (x2,y2), 0, 2)
-                # a = np.sort(np.unique(d))
-                # condition = d < np.max(a)  #a[len(a)//2]
-                # condition = condition.reshape(temp_image.shape)
-                # temp_image[condition] = 0
-                # temp_image = np.abs(temp_image - np.max(a))
-                # temp_image[temp_image < int(a[-1]*0.9)] = 32
-                # l, u = np.min(temp_image), np.max(temp_image)
-                # condition_b1 = temp_image == l
-                # condition_b2 = temp_image == u
-                # condition_b3 = temp_image == (u-l)//2
-                # condition_b4 = temp_image == int(l*2)
-                # condition_b5 = temp_image == int(u//0.8)
-                #
-                # condition = np.logical_or(condition_b1, condition_b2)
-                # condition = np.logical_or(condition, condition_b3)
-                # condition = np.logical_or(condition, condition_b4)
-                # condition = np.logical_or(condition, condition_b5)
-                # temp_image[condition] = 200
-                # temp_image[np.logical_not(condition)] = 32
+        # temp_image = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2GRAY)
+        # if self.kernel is not None:
+        #     temp_image = cv2.cvtColor(temp_image, cv2.COLOR_BGR2GRAY)
+        # else:
+        #     temp_image = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2GRAY)
+        # self._color_frame = (-np.log(1/((1 + temp_image)/257) - 1)).astype("uint8")
+        # self._color_frame = np.einsum("ijk,lk->ijl", self._color_frame, self.rotation_matrix(np.pi))
+        # n=100
+        # sobel_x = np.c_[
+        #     [-1,0,1],
+        #     [-2,0,2],q
+        #     [-1,0,1]
+        # ]
+        #
+        # sobel_y = np.c_[
+        #     [1,2,1],
+        #     [0,0,0],
+        #     [-1,-2,-1]
+        # ]
+        # ims = []
+        # for d in range(3):
+        #     sx = convolve2d(temp_image[:,:,d], sobel_x, mode="same", boundary="symm")
+        #     sy = convolve2d(temp_image[:,:,d], sobel_y, mode="same", boundary="symm")
+        #     ims.append(np.sqrt(sx*sx + sy*sy))
+        #
+        # self._color_frame = np.stack(ims, axis=2).astype("uint8")
+        # self._color_frame = self.median_filter_all_colours(temp_image, 71)
+        # def simple_threshold(im, threshold=128):
+        #     return ((im > threshold) * 255).astype("uint8")
+        # temp_image = simple_threshold(temp_image)
+        # thresholds = [100,120,128,138,150]
 
+        # temp_image = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2GRAY)
 
+        # h, w = temp_image.shape[:2]
+        # im_small_long = temp_image.reshape((h * w, 3))
+        # im_small_wide = im_small_long.reshape((h, w, 3))
 
-        else:
-            temp_image = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2GRAY)
+        # km = KMeans(n_clusters=3)
+        #
+        # km.fit(im_small_long)
 
-        # temp_image = cv2.blur(temp_image, (9, 9))
-        # frame, frame_norm = self.remove_shadow(temp_image)
-        # temp_image = frame_norm
+        # cc = km.cluster_centers_.astype(np.uint8)
+        # self._color_frame = np.asarray([cc[i] for i in km.labels_]).reshape((h, w, 3))
+        temp_image = cv2.cvtColor(self.shadow_frame, cv2.COLOR_BGR2GRAY)
+        temp_image = cv2.medianBlur(temp_image, 7)
+        # Frame store manager ################################################
         if len(self.frame_store) == 0:
             self.frame_store = [temp_image]
         else:
             del self.frame_store[0]
-        # self.frame_store.append(cv2.flip(temp_image, flipCode=1))
         self.frame_store.append(temp_image)
 
-        # Final and mandatory gray and color frame assignment
+        # Final and mandatory gray and color frame assignment ################
         self._gray_frame = temp_image
         self._color_frame = self.shadow_frame.copy()
+
+    def assign_view_frame(self):
+        if self.color_view:
+            self._view_frame = self._color_frame.copy()
+        else:
+            self._view_frame = cv2.cvtColor(self._gray_frame, cv2.COLOR_GRAY2BGR)
 
     def select_from_mask(self, temp_image):
         self.mask = np.zeros(temp_image.shape[:2], np.uint8)
@@ -226,12 +213,6 @@ class VideoStream(object):
         frame = cv2.merge(result_planes)
         frame_norm = cv2.merge(result_norm_planes)
         return frame, frame_norm
-
-    def assign_view_frame(self):
-        if self.color_view:
-            self._view_frame = self.shadow_frame.copy()
-        else:
-            self._view_frame = cv2.cvtColor(self._gray_frame, cv2.COLOR_GRAY2BGR)
 
     def assign_kernel(self, kernel):
         self.kernel = kernel
@@ -371,7 +352,7 @@ class RectangleStream(object):
             tl, br = (rectangle[0], rectangle[1]), (rectangle[2], rectangle[3])
             cv2.rectangle(frame, tl, br, cc.LIGHTYELLOW1.BGR(), 1)
 
-    def sub_frame_from_xy(self, frame, x, y):
+    def sub_frame_from_xy(self, frame, x, y, in_color=False):
         l, _, _, b = self.rectangles_flattened[0]
         _, t, r, _ = self.rectangles_flattened[-1]
         rectangles = len(self.rectangles_flattened)
@@ -388,8 +369,10 @@ class RectangleStream(object):
                 x_l, x_r, y_t, y_b = rectangle[0], rectangle[2], rectangle[1], rectangle[3]
                 # #########################################################################
                 x, y = self.center(rectangle)
-                # display(offset, x, y, y_t, y_b, x_l, x_r, frame.size)
-                return offset, (x, y), frame[y_t:y_b, x_l:x_r]
+                if in_color:
+                    return offset, (x, y), frame[y_t:y_b, x_l:x_r, :]
+                else:
+                    return offset, (x, y), frame[y_t:y_b, x_l:x_r]
         return None, None, None
 
     def center(self, rectangle):

@@ -39,7 +39,7 @@ print('Project opened')
 window_title = '{} ({})'.format(video_file_name, video_list_name)
 video_stream = VideoStream(video_url, grab=False, resize=wh)
 if video_stream.load():
-    rectangle_stream = RectangleStream(video_stream.wh(), (16*1, 16*1), rows=10, margin=1)
+    rectangle_stream = RectangleStream(video_stream.wh(), (8*1, 8*1), rows=10, margin=1)
     window_stream = WindowStream(window_title, frame_rate)
     state = StateManager(video_stream, rectangle_stream, window_stream)
 while True:

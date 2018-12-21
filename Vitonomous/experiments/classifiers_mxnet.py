@@ -17,7 +17,6 @@ class MXNetClassifier:
     CUDA = True
     LOG_INTERVAL = 100
 
-
     def __init__(self, inputs, classes):
         if self.CUDA:
             self.ctx = mx.gpu(0)
@@ -26,21 +25,28 @@ class MXNetClassifier:
         # define network
         # 'relu', 'sigmoid', 'softrelu', 'softsign', 'tanh'
         inputs *= 3
+        channels = 50
+        channel_width = 1
         self.net = nn.Sequential()
         with self.net.name_scope():
             # self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
-            self.net.add(gluon.nn.Conv2D(channels=32*1, kernel_size=(3,3), padding=1, activation="relu"))
+            # self.net.add(gluon.nn.Conv2D(
+            #     channels=channels*channel_width, kernel_size=(3, 3), padding=1, activation="relu"
+            # ))
             self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
             #
-            # self.net.add(gluon.nn.Conv2D(channels=32*2, kernel_size=(3,3), padding=1, activation="relu"))
-            # self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
+            channel_width += 1
+            # self.net.add(gluon.nn.Conv2D(
+            #     channels=channels*channel_width, kernel_size=(3, 3), padding=1, activation="relu"
+            # ))
+            self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
             #
             # self.net.add(gluon.nn.Conv2D(channels=32*3, kernel_size=(3,3), padding=1, activation="relu"))
             # self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
             #
             self.net.add(gluon.nn.Flatten())
-
-            self.net.add(nn.Dense(32*4, activation="relu"))
+            channel_width += 1
+            self.net.add(nn.Dense(channels*channel_width, activation="relu"))
 
             # self.net.add(nn.Dense(inputs, activation="relu"))
             # self.net.add(nn.Dense(inputs//3, activation="relu"))

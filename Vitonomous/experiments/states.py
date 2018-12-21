@@ -17,7 +17,7 @@ class StateManager(object):
         self.rectangle_stream = rectangle_stream
         self.window_stream = window_stream
         # ##############################################################################################################
-        self.supported_classes = Classifications.IS_CLASS_3
+        self.supported_classes = Classifications.IS_CLASS_20
         # CLASS 1: Environment
         # CLASS 2: Path
         # CLASS 3: Gravel
@@ -31,7 +31,8 @@ class StateManager(object):
         self.train_classifier = self.train_classifier_mxnet
         self.query_classifier = self.query_classifier_mxnet
         self.frame_sourse = None
-        self.block = self.block_1
+        self.source_in_color = False
+        self.block = self.block_3
         # ##############################################################################################################
         self.training_set = TrainingSet()
         self.tracking_aoi = AreaOfInterest(0.1, 0.1, 0.5, self.video_stream.wh(), cc.YELLOW1, 2)
@@ -40,50 +41,54 @@ class StateManager(object):
         self.window_stream.attach_state_manager_callback(self.state_manager_callback)
         # ##############################################################################################################
         self.key_bindings = {
-            ord('q'): (self.quit_application, {}),
-            ord('r'): (self.video_stream.toggle_auto_grab, {}),
-            ord('R'): (self.restart_video_stream, {}),
-            ord(','): (self.video_stream.toggle_grab, {'direction': -1}),
-            ord('.'): (self.video_stream.toggle_grab, {'direction':  1}),
-            ord('='): (self.rectangle_stream.select, {'rows':  1}),
-            ord('-'): (self.rectangle_stream.select, {'rows': -1}),
-            ord('+'): (self.rectangle_stream.select, {'margin': -1}),
-            ord('_'): (self.rectangle_stream.select, {'margin':  1}),
-            2490368: (self.rectangle_stream.select, {'rows':  1, 'locked': True}),
-            2621440: (self.rectangle_stream.select, {'rows': -1, 'locked': True}),
-            2424832: (self.rectangle_stream.select, {'margin':  1, 'locked': True}),
-            2555904: (self.rectangle_stream.select, {'margin': -1, 'locked': True}),
+            ord('h'): ('[h] display_key_bindings', self.display_key_bindings, {}),
+            ord('q'): ('[q] quit_application', self.quit_application, {}),
+            ord('r'): ('[r] video_stream.toggle_auto_grab', self.video_stream.toggle_auto_grab, {}),
+            ord('R'): ('[R] restart_video_stream', self.restart_video_stream, {}),
+            ord(','): ('[,] video_stream.toggle_grab, -1', self.video_stream.toggle_grab, {'direction': -1}),
+            ord('.'): ('[.] video_stream.toggle_grab,  1', self.video_stream.toggle_grab, {'direction':  1}),
+            ord('='): ('[=] rectangle_stream.select, rows,  1', self.rectangle_stream.select, {'rows':  1}),
+            ord('-'): ('[-] rectangle_stream.select, rows, -1', self.rectangle_stream.select, {'rows': -1}),
+            ord('+'): ('[+] rectangle_stream.select, margin,  1', self.rectangle_stream.select, {'margin': -1}),
+            ord('_'): ('[_] rectangle_stream.select, margin, -1', self.rectangle_stream.select, {'margin':  1}),
+            2490368: ('[up] rectangle_stream.select, rows,  1, locked', self.rectangle_stream.select, {'rows':  1, 'locked': True}),
+            2621440: ('[down] rectangle_stream.select, rows, -1, locked', self.rectangle_stream.select, {'rows': -1, 'locked': True}),
+            2424832: ('[right] rectangle_stream.select, margin,  1, locked', self.rectangle_stream.select, {'margin':  1, 'locked': True}),
+            2555904: ('[left] rectangle_stream.select, margin, -1, locked', self.rectangle_stream.select, {'margin': -1, 'locked': True}),
             # ##########################################################################################################
-            ord('g'): (self.toggle_show_grid, {}),
-            ord('G'): (self.toggle_render_grid_content, {}),
-            ord('m')-ord('`'): (self.toggle_view_frame, {}),
+            ord('g'): ('[g] toggle_show_grid', self.toggle_show_grid, {}),
+            ord('G'): ('[G] toggle_render_grid_content', self.toggle_render_grid_content, {}),
+            ord('m')-ord('`'): ('^[m] toggle_view_frame', self.toggle_view_frame, {}),
             # ##########################################################################################################
-            ord('c'): (self.state_toggle_classification, {}),
-            ord('c')-ord('`'): (self.state_toggle_classification_override, {}),
-            ord('p'): (self.state_paint_mode, {}),
-            ord('u'): (self.undo_classification, {}),
+            ord('c'): ('[c] state_toggle_classification', self.state_toggle_classification, {}),
+            ord('c')-ord('`'): ('^[c] state_toggle_classification_override', self.state_toggle_classification_override, {}),
+            ord('p'): ('[p] state_paint_mode', self.state_paint_mode, {}),
+            ord('u'): ('[u] undo_classification', self.undo_classification, {}),
             # ##########################################################################################################
-            ord('t'): (self.state_run_training, {}),
-            ord('k'): (self.toggle_kernel_selection, {}),
-            ord('C'): (self.state_reset_classifications, {}),
-            ord('s'): (self.state_save_classifications, {}),
-            ord('l'): (self.state_load_classifications, {}),
-            ord('B'): (self.state_toggle_blanking, {}),
-            ord('b'): (self.cycle_blanking, {'direction':  1}),
-            ord('n'): (self.cycle_blanking, {'direction': -1}),
-            ord('b')-ord('`'): (self.cycle_block_mode, {}),     # ^b
-            ord('r')-ord('`'): (self.remember_class, {}),       # ^r
-            ord('j'): (self.classifications_generate, {}),
-            ord('0'): (self.state_select_classifications, {'classification': 0}),
-            ord('1'): (self.state_select_classifications, {'classification': 1}),
-            ord('2'): (self.state_select_classifications, {'classification': 2}),
-            ord('3'): (self.state_select_classifications, {'classification': 3}),
-            ord('4'): (self.state_select_classifications, {'classification': 4}),
-            ord('5'): (self.state_select_classifications, {'classification': 5}),
-            ord('6'): (self.state_select_classifications, {'classification': 6}),
-            ord('7'): (self.state_select_classifications, {'classification': 7}),
-            ord('8'): (self.state_select_classifications, {'classification': 8}),
-            ord('9'): (self.state_select_classifications, {'classification': 9}),
+            ord('t')-ord('`'): ('^[t] training_agent', self.training_agent, {}),
+            # ##########################################################################################################
+            ord('t'): ('[t] training_model', self.training_model, {}),
+            ord('k'): ('[k] toggle_kernel_selection', self.toggle_kernel_selection, {}),
+            ord('K'): ('[k] toggle_kernel_query', self.toggle_kernel_query, {}),
+            ord('C'): ('[C] state_reset_classifications', self.state_reset_classifications, {}),
+            ord('s'): ('[s] state_save_classifications', self.state_save_classifications, {}),
+            ord('l'): ('[l] state_load_classifications', self.state_load_classifications, {}),
+            ord('B'): ('[B] state_toggle_blanking', self.state_toggle_blanking, {}),
+            ord('b'): ('[b] cycle_blanking, direction,  1', self.cycle_blanking, {'direction':  1}),
+            ord('n'): ('[n] cycle_blanking, direction, -1', self.cycle_blanking, {'direction': -1}),
+            ord('b')-ord('`'): ('^[b] cycle_block_mode', self.cycle_block_mode, {}),
+            ord('r')-ord('`'): ('^[r] remember_class', self.remember_class, {}),
+            ord('j'): ('[j] classifications_generate', self.classifications_generate, {}),
+            ord('0'): ('[0] state_select_classifications, classification, 0', self.state_select_classifications, {'classification': 0}),
+            ord('1'): ('[1] state_select_classifications, classification, 1', self.state_select_classifications, {'classification': 1}),
+            ord('2'): ('[2] state_select_classifications, classification, 2', self.state_select_classifications, {'classification': 2}),
+            ord('3'): ('[3] state_select_classifications, classification, 3', self.state_select_classifications, {'classification': 3}),
+            ord('4'): ('[4] state_select_classifications, classification, 4', self.state_select_classifications, {'classification': 4}),
+            ord('5'): ('[5] state_select_classifications, classification, 5', self.state_select_classifications, {'classification': 5}),
+            ord('6'): ('[6] state_select_classifications, classification, 6', self.state_select_classifications, {'classification': 6}),
+            ord('7'): ('[7] state_select_classifications, classification, 7', self.state_select_classifications, {'classification': 7}),
+            ord('8'): ('[8] state_select_classifications, classification, 8', self.state_select_classifications, {'classification': 8}),
+            ord('9'): ('[9] state_select_classifications, classification, 9', self.state_select_classifications, {'classification': 9}),
         }
         # ##############################################################################################################
         self.grid_enabled = True
@@ -101,6 +106,9 @@ class StateManager(object):
         self.re_block_mode = self.block_mode
         # ##############################################################################################################
         self.selecting_kernel = False
+        self.querying_kernel = False
+        # ##############################################################################################################
+        self.kernel_minimum = 0
         # ##############################################################################################################
         self.classify_session = []
         # ##############################################################################################################
@@ -137,7 +145,7 @@ class StateManager(object):
         if key == -1:
             pass
         elif key in self.key_bindings:
-            method, kwargs = self.key_bindings[key]
+            description, method, kwargs = self.key_bindings[key]
             return method(**kwargs)
         else:
             print('key: {} {} {}'.format(key, bin(key), hex(key)))
@@ -145,12 +153,16 @@ class StateManager(object):
 
     # ##################################################################################################################
     def state_manager_callback(self, event, x, y):
-        if self.classify or self.selecting_kernel:
+        if self.classify or self.selecting_kernel or self.querying_kernel:
             if event == cv2.EVENT_LBUTTONUP:
                 self.validate_class_selection(x, y)
             elif event == cv2.EVENT_MOUSEMOVE and self.paint_mode is True:
                 self.validate_class_selection(x, y)
     # ##################################################################################################################
+
+    def display_key_bindings(self):
+        for description, method, kwargs in self.key_bindings.values():
+            print(description)
 
     @staticmethod
     def quit_application():
@@ -166,6 +178,10 @@ class StateManager(object):
         self.selecting_kernel = not self.selecting_kernel
         self.video_stream.kernel = None
         print('MODE: Kernel selection {}'.format('Enabled' if self.selecting_kernel else 'Disabled'))
+
+    def toggle_kernel_query(self):
+        self.querying_kernel = not self.querying_kernel
+        print('MODE: Kernel query {}'.format('Enabled' if self.selecting_kernel else 'Disabled'))
 
     def toggle_view_frame(self):
         self.video_stream.toggle_view()
@@ -206,7 +222,7 @@ class StateManager(object):
 
     # ##################################################################################################################
     def validate_class_selection(self, x, y):
-        offset, xy, sub_frame = self.rectangle_stream.sub_frame_from_xy(self.frame_sourse, x, y)
+        offset, xy, sub_frame = self.rectangle_stream.sub_frame_from_xy(self.frame_sourse, x, y, self.source_in_color)
         if self.paint_mode is False:
             print('color at x={}, y={}: {}'.format(x, y, self.video_stream.pick_color(x, y)))
         if self.classify and sub_frame is not None and offset not in self.re_offset:
@@ -214,14 +230,57 @@ class StateManager(object):
             self.re_offset.append(offset)
         if self.selecting_kernel:
             self.video_stream.kernel = (xy, sub_frame)
+            cv2.imwrite('kernels/kernel_s.png', sub_frame.astype(np.uint8))
+        if self.querying_kernel:
+            mn, mx = np.min(sub_frame), np.max(sub_frame)
+            dt = mx-mn
+            topography = sub_frame-np.min(sub_frame)
+            contour = topography.flat[1:] - topography.flat[:-1]
+            # contour, counts = np.unique(topography, return_counts=True)
+            # contour_deltas = contour[1:] - contour[:-1]
+            print('sub_frame', sub_frame, 'len', len(sub_frame))
+            print('topography', topography, 'len', len(topography))
+            print('mn, mx, dt', mn, mx, dt)
+            print('contour', contour, 'len', len(contour))
+            # print('contour_deltas', contour_deltas, 'len', len(contour_deltas))
+            # ##########################################################################################################
+            # deltas_set, deltas_counts = np.unique(contour, return_counts=True)
+            smoothness = contour[1:] - contour[:-1]
+            nonzero = np.count_nonzero(smoothness)
+            zero = len(smoothness) - nonzero
+            m = 1-((nonzero - zero)/len(smoothness))
+            print('smoothness', smoothness, 'm', m)
+            # deltas = np.unique(contour_deltas)
+            # contour_entropy = 0 #self.entropy(deltas_set, deltas_counts)
+            bins = 256
+            bincount = np.bincount(topography.flat, minlength=bins)
+            binstretch = np.arange(1, 257)
+            g = bincount * binstretch
+            m = np.sum(g)
+            # m = np.count_nonzero(bincount)
+            # p = bincount / len(topography)
+            # p = p[p > 0]
+            # contour_entropy = -np.sum(p * np.log2(p), axis=0)
+            # contour_entropy = np.round(contour_entropy, 2)
+
+            # print('contour_deltas', contour_deltas, 'len', len(contour_deltas), 'entropy ==>', contour_entropy)
+            # print('deltas_set', deltas_set, 'len', len(deltas_set))
+            # print('deltas_counts', deltas_counts, 'len', len(deltas_counts))
+            print('bincount', bincount, 'm', m)
+            print('p', g, 'len', len(g))
+            # print('p', p * np.log2(p), 'len', len(p * np.log2(p)))
+            self.kernel_minimum = m
+
 
     def push_class_selection(self, frame_number, offset, xy, frame_data):
-        frame_data = cv2.cvtColor(frame_data, cv2.COLOR_GRAY2BGR)
-        classification, frame_data = self.classifier.prepare(self.classification, frame_data, dropout=False)
-        self.training_set.push(frame_number, classification, offset, xy, frame_data)
-
-    def push_classification(self, frame_number, xy):
-        self.classification_set.push(frame_number, xy, self.classification)
+        if not self.source_in_color:
+            frame_data = cv2.cvtColor(frame_data, cv2.COLOR_GRAY2BGR)
+        classification, data = self.classifier.prepare(self.classification, frame_data, dropout=False)
+        self.training_set.push(frame_number, classification, offset, xy, data)
+        classification, data = self.classifier.prepare(self.classification, cv2.flip(frame_data, 0), dropout=False)
+        self.training_set.push(frame_number, classification, offset, xy, data)
+        classification, data = self.classifier.prepare(self.classification, cv2.flip(frame_data, 1), dropout=False)
+        self.training_set.push(frame_number, classification, offset, xy, data)
 
     def undo_classification(self):
         self.training_set.pop(self.video_stream.frame_counter)
@@ -296,7 +355,12 @@ class StateManager(object):
         print('{}: {} <{}>'.format(state_string, Classifications.name(classification), color_name))
 
     # ##################################################################################################################
-    def state_run_training(self):
+    def training_agent(self):
+
+        pass
+
+    # ##################################################################################################################
+    def training_model(self):
         print('MODE: Training')
         self.train_classifier()
         print('Training done')
@@ -351,8 +415,11 @@ class StateManager(object):
         batch = []
         for i, rectangle in enumerate(self.rectangle_stream):
             x_l, x_r, y_t, y_b = rectangle[0], rectangle[2], rectangle[1], rectangle[3]
-            frame = self.frame_sourse[y_t:y_b, x_l:x_r]
-            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+            if self.source_in_color:
+                frame = self.frame_sourse[y_t:y_b, x_l:x_r, :]
+            else:
+                frame = self.frame_sourse[y_t:y_b, x_l:x_r]
+                frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
             label, data = self.classifier.prepare(0, frame)
             batch.append((data, label))
         Y = self.classifier.predict(batch)
@@ -534,13 +601,58 @@ class StateManager(object):
             if samples > 0:
                 self.tracking_aoi.reshape(aoi_l, aoi_r)
                 self.tracking_aoi.render(self.video_stream.view_frame())
-        # ##############################################################################################################
+
+    def new_frame_query(self):
+        for i, rectangle in enumerate(self.rectangle_stream):
+            x, y = self.rectangle_stream.center(rectangle)
+            offset, xy, frame = self.rectangle_stream.sub_frame_from_xy(self.frame_sourse, x, y, self.source_in_color)
+            mn, mx = np.min(frame), np.max(frame)
+            dt = mx-mn
+            topography = frame-np.min(frame)
+            # contour, counts = np.unique(topography, return_counts=True)
+            # contour_deltas = contour[1:] - contour[:-1]
+            # smoothness = contour_deltas[1:] - contour_deltas[:-1]
+            # nonzero = np.count_nonzero(smoothness)
+            # zero = len(smoothness) - nonzero
+            # m = zero - nonzero
+            contour = topography.flat[1:] - topography.flat[:-1]
+            smoothness = contour[1:] - contour[:-1]
+            nonzero = np.count_nonzero(smoothness)
+            zero = len(smoothness) - nonzero
+            m = 1-((nonzero - zero)/len(smoothness))
+
+            bins = 256
+            bincount = np.bincount(topography.flat, minlength=bins)
+            binstretch = np.arange(1, 257)
+            g = bincount * binstretch
+            m = np.sum(g)
+
+            # bins = np.max(contour_deltas)
+            # bincount = np.bincount(contour_deltas, minlength=bins)
+            # p = bincount / len(contour_deltas)
+            # p = p[p > 0]
+            # contour_entropy = -np.sum(p * np.log2(p), axis=0)
+            # contour_entropy = np.round(contour_entropy, 2)
+
+            if m <= self.kernel_minimum:
+                class_color = self.class_colors[-1]
+            else:
+                class_color = self.class_colors[0]
+            radius = 3
+            cv2.circle(self.video_stream.view_frame(), (x, y), radius, class_color.BGR(), thickness=-1)
+
+    def block_3(self):
+        self.show_grid()
+        if self.querying_kernel:
+            self.new_frame_query()
+
 
     # ##################################################################################################################
     def show(self):
-        # self.frame_sourse = self.video_stream.color_frame()
-        self.frame_sourse = self.video_stream.gray_frame()
-        # self.frame_sourse = frame_store[0]
+        if self.source_in_color:
+            self.frame_sourse = self.video_stream.color_frame()
+        else:
+            self.frame_sourse = self.video_stream.gray_frame()
         self.block()
 
     def save(self):
